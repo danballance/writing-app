@@ -1,6 +1,14 @@
 import { useCreateBlockNote } from "@blocknote/react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
+import { ColumnResizeHandle } from "./components/ColumnResizeHandle";
 import { EditorWorkspace } from "./components/EditorWorkspace";
 import { ResponsiveDrawer } from "./components/ResponsiveDrawer";
 import { Sidebar } from "./components/Sidebar";
@@ -49,13 +57,61 @@ const artifacts: ArtifactReference[] = [
   },
 ];
 
+const MIN_NAVIGATION_WIDTH = 220;
+const MAX_NAVIGATION_WIDTH = 380;
+const MIN_CONTEXT_WIDTH = 280;
+const MAX_CONTEXT_WIDTH = 720;
+const MIN_EDITOR_WIDTH = 520;
+const NAVIGATION_WIDTH_KEY = "scribe-navigation-column-width";
+const CONTEXT_WIDTH_KEY = "scribe-context-column-width";
+
+function readSavedWidth(key: string, min: number, max: number) {
+  try {
+    const width = Number(window.localStorage.getItem(key));
+    return Number.isFinite(width) && width >= min && width <= max ? width : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveWidth(key: string, width: number | null) {
+  try {
+    if (width === null) {
+      window.localStorage.removeItem(key);
+    } else {
+      window.localStorage.setItem(key, String(width));
+    }
+  } catch {
+    // Column resizing remains available when storage is blocked.
+  }
+}
+
 function isTextSuggestion(item: SuggestionItem): item is TextSuggestion {
   return item.kind === "snippet" || item.kind === "fact" || item.kind === "term";
 }
 
 export default function App() {
+  const workspaceRef = useRef<HTMLElement>(null);
+  const navigationColumnRef = useRef<HTMLDivElement>(null);
+  const contextColumnRef = useRef<HTMLDivElement>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [navigationColumnWidth, setNavigationColumnWidth] = useState<number | null>(
+    () =>
+      readSavedWidth(
+        NAVIGATION_WIDTH_KEY,
+        MIN_NAVIGATION_WIDTH,
+        MAX_NAVIGATION_WIDTH,
+      ),
+  );
+  const [contextColumnWidth, setContextColumnWidth] = useState<number | null>(
+    () =>
+      readSavedWidth(
+        CONTEXT_WIDTH_KEY,
+        MIN_CONTEXT_WIDTH,
+        MAX_CONTEXT_WIDTH,
+      ),
+  );
   const [steeringFocusRequest, setSteeringFocusRequest] = useState(0);
   const editor = useCreateBlockNote({ schema: writingSchema, initialContent });
   const contextSource = useMemo(() => createAgentContextSource(artifacts), []);
@@ -74,6 +130,84 @@ export default function App() {
       }
     },
   );
+
+  const getMaximumNavigationWidth = useCallback(() => {
+    const workspaceWidth =
+      workspaceRef.current?.getBoundingClientRect().width ?? window.innerWidth;
+    const contextWidth =
+      contextColumnRef.current?.getBoundingClientRect().width ?? MIN_CONTEXT_WIDTH;
+    return Math.max(
+      MIN_NAVIGATION_WIDTH,
+      Math.min(
+        MAX_NAVIGATION_WIDTH,
+        workspaceWidth - contextWidth - MIN_EDITOR_WIDTH,
+      ),
+    );
+  }, []);
+
+  const getMaximumContextWidth = useCallback(() => {
+    const workspaceWidth =
+      workspaceRef.current?.getBoundingClientRect().width ?? window.innerWidth;
+    const navigationWidth =
+      navigationColumnRef.current?.getBoundingClientRect().width ??
+      MIN_NAVIGATION_WIDTH;
+    return Math.max(
+      MIN_CONTEXT_WIDTH,
+      Math.min(
+        MAX_CONTEXT_WIDTH,
+        workspaceWidth - navigationWidth - MIN_EDITOR_WIDTH,
+      ),
+    );
+  }, []);
+
+  const resizeNavigationColumn = useCallback((width: number) => {
+    setNavigationColumnWidth(width);
+    saveWidth(NAVIGATION_WIDTH_KEY, width);
+  }, []);
+
+  const resizeContextColumn = useCallback((width: number) => {
+    setContextColumnWidth(width);
+    saveWidth(CONTEXT_WIDTH_KEY, width);
+  }, []);
+
+  const resetNavigationColumn = useCallback(() => {
+    setNavigationColumnWidth(null);
+    saveWidth(NAVIGATION_WIDTH_KEY, null);
+  }, []);
+
+  const resetContextColumn = useCallback(() => {
+    setContextColumnWidth(null);
+    saveWidth(CONTEXT_WIDTH_KEY, null);
+  }, []);
+
+  useEffect(() => {
+    const constrainSavedWidths = () => {
+      if (!window.matchMedia("(min-width: 1280px)").matches) {
+        return;
+      }
+
+      setNavigationColumnWidth((width) => {
+        if (width === null) {
+          return null;
+        }
+        const constrained = Math.min(width, getMaximumNavigationWidth());
+        saveWidth(NAVIGATION_WIDTH_KEY, constrained);
+        return constrained;
+      });
+      setContextColumnWidth((width) => {
+        if (width === null) {
+          return null;
+        }
+        const constrained = Math.min(width, getMaximumContextWidth());
+        saveWidth(CONTEXT_WIDTH_KEY, constrained);
+        return constrained;
+      });
+    };
+
+    constrainSavedWidths();
+    window.addEventListener("resize", constrainSavedWidths);
+    return () => window.removeEventListener("resize", constrainSavedWidths);
+  }, [getMaximumContextWidth, getMaximumNavigationWidth]);
 
   useEffect(() => {
     const desktopQuery = window.matchMedia("(min-width: 1280px)");
@@ -192,18 +326,41 @@ export default function App() {
     />
   );
 
-  const contextColumnClass = inbox.selectedEntry
-    ? "xl:grid-cols-[248px_minmax(0,1fr)_clamp(30rem,38vw,40rem)] 2xl:grid-cols-[280px_minmax(0,1fr)_clamp(30rem,38vw,40rem)]"
-    : "xl:grid-cols-[248px_minmax(0,1fr)_320px] 2xl:grid-cols-[280px_minmax(0,1fr)_360px]";
+  const workspaceColumnStyles = {
+    ...(navigationColumnWidth === null
+      ? {}
+      : { "--navigation-column-width": `${navigationColumnWidth}px` }),
+    ...(contextColumnWidth === null
+      ? {}
+      : { "--context-column-width": `${contextColumnWidth}px` }),
+  } as CSSProperties;
 
   return (
     <div className="app-background min-h-dvh p-0 xl:p-2 2xl:p-[18px]">
       <main
+        ref={workspaceRef}
         aria-label="ScribeAI writing workspace"
-        className={`grid h-dvh min-h-0 overflow-hidden bg-white xl:h-[calc(100dvh-1rem)] xl:rounded-3xl xl:border xl:border-[#bec0cb] xl:shadow-[0_22px_70px_rgb(0_0_0/28%)] 2xl:h-[calc(100dvh-36px)] 2xl:rounded-[2rem] ${contextColumnClass}`}
+        className={`workspace-grid grid h-dvh min-h-0 overflow-hidden bg-white xl:h-[calc(100dvh-1rem)] xl:rounded-3xl xl:border xl:border-[#bec0cb] xl:shadow-[0_22px_70px_rgb(0_0_0/28%)] 2xl:h-[calc(100dvh-36px)] 2xl:rounded-[2rem] ${
+          inbox.selectedEntry ? "workspace-grid--detail" : ""
+        }`}
+        style={workspaceColumnStyles}
       >
-        <div className="hidden min-h-0 xl:block">
+        <div
+          ref={navigationColumnRef}
+          id="project-navigation-column"
+          className="relative hidden min-h-0 xl:block"
+        >
           <Sidebar />
+          <ColumnResizeHandle
+            controls="project-navigation-column"
+            label="Resize project navigation"
+            maxWidth={getMaximumNavigationWidth}
+            minWidth={MIN_NAVIGATION_WIDTH}
+            panelRef={navigationColumnRef}
+            resizeDirection="right"
+            onReset={resetNavigationColumn}
+            onResize={resizeNavigationColumn}
+          />
         </div>
 
         <EditorWorkspace
@@ -219,7 +376,21 @@ export default function App() {
           onReturnToPins={inbox.returnToPins}
         />
 
-        <div className="hidden min-h-0 xl:block">
+        <div
+          ref={contextColumnRef}
+          id="writing-partner-column"
+          className="relative hidden min-h-0 xl:block"
+        >
+          <ColumnResizeHandle
+            controls="writing-partner-column"
+            label="Resize writing partner"
+            maxWidth={getMaximumContextWidth}
+            minWidth={MIN_CONTEXT_WIDTH}
+            panelRef={contextColumnRef}
+            resizeDirection="left"
+            onReset={resetContextColumn}
+            onResize={resizeContextColumn}
+          />
           {dock}
         </div>
       </main>

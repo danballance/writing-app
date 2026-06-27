@@ -144,6 +144,34 @@
     #2f3038;
 }
 
+.column-resize-active {
+  cursor: col-resize;
+  user-select: none;
+}
+
+@media (min-width: 80rem) {
+  .workspace-grid {
+    --navigation-column-width: 248px;
+    --context-column-width: 320px;
+
+    grid-template-columns:
+      var(--navigation-column-width)
+      minmax(0, 1fr)
+      var(--context-column-width);
+  }
+
+  .workspace-grid--detail {
+    --context-column-width: clamp(30rem, 38vw, 40rem);
+  }
+}
+
+@media (min-width: 96rem) {
+  .workspace-grid {
+    --navigation-column-width: 280px;
+    --context-column-width: 360px;
+  }
+}
+
 .bn-root[data-editor-surface][data-color-scheme] {
   --bn-colors-editor-text: #2c2a35;
   --bn-colors-editor-background: transparent;
