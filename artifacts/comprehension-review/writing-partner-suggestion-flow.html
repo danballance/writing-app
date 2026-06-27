@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Comprehension Review: Writing Partner Suggestion Flow</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f4ef;
+      --paper: #fffdf9;
+      --ink: #24211d;
+      --muted: #68625b;
+      --line: #ded6ca;
+      --soft: #f0e9df;
+      --accent: #5748e5;
+      --accent-soft: #ece9ff;
+      --warn: #8a4b00;
+      --warn-bg: #fff3dc;
+      --ok: #166534;
+      --ok-bg: #eaf8ef;
+      --code-bg: #1f1d24;
+      --code-ink: #f5f1ea;
+      --shadow: 0 18px 50px rgba(47, 37, 25, 0.09);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top left, #eeeaff 0, transparent 34rem), var(--bg);
+      color: var(--ink);
+      font: 16px/1.65 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: var(--accent); }
+    .page { max-width: 1180px; margin: 0 auto; padding: 36px 22px 64px; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 290px;
+      gap: 28px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+    .eyebrow { color: var(--accent); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: .78rem; }
+    h1 { font-size: clamp(2.1rem, 5vw, 4.5rem); line-height: .98; letter-spacing: -.06em; margin: 10px 0 18px; max-width: 880px; }
+    .lede { max-width: 760px; font-size: 1.12rem; color: #4f4942; }
+    .meta-card, section {
+      background: rgba(255, 253, 249, .88);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+    }
+    .meta-card { padding: 18px; font-size: .92rem; }
+    .meta-card dl { display: grid; gap: 10px; margin: 0; }
+    .meta-card div { display: grid; gap: 2px; }
+    .meta-card dt { color: var(--muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
+    .meta-card dd { margin: 0; font-weight: 650; }
+    .layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 26px; align-items: start; }
+    nav {
+      position: sticky;
+      top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 253, 249, .84);
+      padding: 14px;
+    }
+    nav a { display: block; padding: 8px 10px; border-radius: 10px; color: #504a43; text-decoration: none; font-size: .92rem; }
+    nav a:hover { background: var(--soft); color: var(--accent); }
+    main { display: grid; gap: 24px; }
+    section { padding: clamp(20px, 4vw, 34px); }
+    h2 { margin: 0 0 14px; font-size: clamp(1.45rem, 3vw, 2.1rem); line-height: 1.12; letter-spacing: -.03em; }
+    h3 { margin: 26px 0 10px; font-size: 1.12rem; }
+    p { margin: 0 0 14px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .flow { display: grid; gap: 10px; margin: 18px 0; }
+    .flow-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; align-items: stretch; }
+    .node, .explain, .callout, .mini-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fffaf2;
+      padding: 14px 16px;
+    }
+    .node { border-color: #c9c1ff; background: var(--accent-soft); color: #2d236f; font-weight: 800; }
+    .explain { color: #4d4740; }
+    .callout { margin: 18px 0; }
+    .callout.warn { background: var(--warn-bg); border-color: #f1c27c; color: var(--warn); }
+    .callout.ok { background: var(--ok-bg); border-color: #b7dfc5; color: var(--ok); }
+    .mini-card h3 { margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: .95rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 11px 10px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
+    pre { margin: 14px 0 18px; overflow: auto; border-radius: 16px; background: var(--code-bg); color: var(--code-ink); padding: 18px; font-size: .88rem; line-height: 1.55; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    .hl { color: #b9b1ff; font-weight: 800; }
+    .comment { color: #a7a0b5; }
+    .small { color: var(--muted); font-size: .92rem; }
+    ul { padding-left: 1.2rem; }
+    li { margin: 6px 0; }
+    details { border: 1px solid var(--line); border-radius: 14px; background: #fffaf2; padding: 12px 14px; margin: 10px 0; }
+    summary { cursor: pointer; font-weight: 800; }
+    .quiz details { background: #fbfaff; border-color: #d9d4ff; }
+    .badge { display: inline-flex; align-items: center; min-height: 26px; border-radius: 999px; padding: 0 10px; background: var(--accent-soft); color: #392db4; font-size: .78rem; font-weight: 800; }
+    @media (max-width: 900px) {
+      .hero, .layout, .grid-2, .flow-row { grid-template-columns: 1fr; }
+      nav { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div>
+        <div class="eyebrow">Comprehension review</div>
+        <h1>A static AI gutter became a live writing partner</h1>
+        <p class="lede">This change turns the right-hand context area from hard-coded suggestions into an event-driven suggestion inbox. The editor can now preview a text suggestion inline, accept it into the document, or cancel it without letting tentative text contaminate the agent context.</p>
+      </div>
+      <aside class="meta-card" aria-label="Review metadata">
+        <dl>
+          <div><dt>Change state</dt><dd>Working tree changes, not committed</dd></div>
+          <div><dt>History context</dt><dd><code>b6326e9</code> first TypeScript iteration after HTML mockup</dd></div>
+          <div><dt>Validation observed</dt><dd><code>npm test</code> passed; <code>npm run build</code> passed with chunk-size warning</dd></div>
+        </dl>
+      </aside>
+    </header>
+
+    <div class="layout">
+      <nav aria-label="Review navigation">
+        <a href="#mental-model">Mental model</a>
+        <a href="#old-new">What changed from the old UI</a>
+        <a href="#data-flow">Suggestion data path</a>
+        <a href="#preview">Inline preview path</a>
+        <a href="#surface-area">Files and boundaries</a>
+        <a href="#risks">Invariants and risks</a>
+        <a href="#tests">Tests and gaps</a>
+        <a href="#questions">Comprehension check</a>
+      </nav>
+
+      <main>
+        <section id="mental-model">
+          <span class="badge">Primary behaviour change</span>
+          <h2>The app now has an agent loop around the editor</h2>
+          <p>The previous TypeScript version was mostly layout: a BlockNote editor, a static context gutter, and a static layout-suggestions strip. This diff moves editor ownership up into <code>App.tsx</code>, adds a suggestion feed/inbox model, and renders one <code>SuggestionDock</code> on desktop or inside a wider mobile drawer.</p>
+
+          <div class="flow" aria-label="High level flow">
+            <div class="flow-row"><div class="node">Editor</div><div class="explain">BlockNote now uses <code>writingSchema</code>, which includes a custom <code>suggestionPreview</code> block.</div></div>
+            <div class="flow-row"><div class="node">Context source</div><div class="explain"><code>getAcceptedDocumentBlocks(editor)</code> extracts only accepted blocks, excluding preview blocks.</div></div>
+            <div class="flow-row"><div class="node">Mock feed</div><div class="explain">The feed emits suggestion events, status events, updates, retractions, document observations, and steering responses.</div></div>
+            <div class="flow-row"><div class="node">Inbox reducer</div><div class="explain">The reducer deduplicates, limits, sorts, marks viewed/stale/withdrawn, and tracks the one active preview.</div></div>
+            <div class="flow-row"><div class="node">Suggestion dock</div><div class="explain">The user can read suggestions, send steering text, dismiss items, and preview text suggestions in the document.</div></div>
+          </div>
+        </section>
+
+        <section id="old-new">
+          <h2>The UI boundary moved from presentation to behaviour</h2>
+          <p><code>ContextGutter.tsx</code> and <code>LayoutSuggestions.tsx</code> were removed. They were static components with hard-coded tabs, cards, and action buttons. Their replacement is a dock driven by feed state and reducer state.</p>
+
+          <table>
+            <thead><tr><th>Before</th><th>Now</th><th>Why it matters</th></tr></thead>
+            <tbody>
+              <tr><td><code>ContextGutter</code> showed fixed snippets and tabs.</td><td><code>SuggestionDock</code> receives entries, status, errors, selected item, and preview state.</td><td>The right column is now stateful. It can react to agent events and user actions.</td></tr>
+              <tr><td><code>LayoutSuggestions</code> rendered a static horizontal strip under the header.</td><td>Outline and layout suggestions are just suggestion kinds in the same inbox.</td><td>Structure advice and text snippets share one event channel instead of separate UI areas.</td></tr>
+              <tr><td><code>EditorWorkspace</code> created its own default BlockNote editor.</td><td><code>App</code> creates a schema-aware editor and passes editor callbacks down.</td><td>The app can observe document changes and insert preview blocks.</td></tr>
+              <tr><td>The Generate ideas button had no behavioural prop.</td><td>It calls <code>openSteering</code>, opens the dock on small screens, and focuses the prompt.</td><td>Header actions are connected to the agent steering path.</td></tr>
+            </tbody>
+          </table>
+
+          <pre><code><span class="comment">// src/components/EditorWorkspace.tsx</span>
+type EditorWorkspaceProps = {
+  <span class="hl">editor: WritingEditor;</span>
+  onOpenContext: () =&gt; void;
+  onOpenNavigation: () =&gt; void;
+  <span class="hl">onGenerateIdeas: () =&gt; void;</span>
+  <span class="hl">onEditorChange: () =&gt; void;</span>
+  <span class="hl">onEditorSelectionChange: () =&gt; void;</span>
+};
+
+export function EditorWorkspace({ editor, onGenerateIdeas, onEditorChange, onEditorSelectionChange, ... }) {
+  return (
+    &lt;section aria-label="Draft workspace"&gt;
+      &lt;DocumentHeader onGenerateIdeas={onGenerateIdeas} ... /&gt;
+      &lt;DocumentEditor
+        editor={editor}
+        onChange={onEditorChange}
+        onSelectionChange={onEditorSelectionChange}
+      /&gt;
+    &lt;/section&gt;
+  );
+}</code></pre>
+        </section>
+
+        <section id="data-flow">
+          <h2>Follow one suggestion from source to queue</h2>
+          <p>The suggestion model is explicit in <code>src/suggestions/types.ts</code>. A suggestion can be text, structure, or a Mermaid-backed mind map. All variants share common metadata such as <code>dedupeKey</code>, <code>sourceLabels</code>, and <code>createdAt</code>.</p>
+
+          <pre><code><span class="comment">// src/suggestions/types.ts</span>
+export type SuggestionKind =
+  | "snippet"
+  | "fact"
+  | "term"
+  | "outline"
+  | "layout"
+  | "mindMap";
+
+export type TextSuggestion = SuggestionBase &amp; {
+  kind: "snippet" | "fact" | "term";
+  <span class="hl">insertText: string;</span>
+};
+
+export type SuggestionEvent =
+  | { type: "suggestion.added"; item: SuggestionItem }
+  | { type: "suggestion.updated"; item: SuggestionItem }
+  | { type: "suggestion.retracted"; id: string }
+  | { type: "agent.status"; status: AgentStatus }
+  | { type: "agent.error"; message: string; recoverable: boolean };</code></pre>
+
+          <div class="grid-2">
+            <div class="mini-card">
+              <h3>The context source is revisioned</h3>
+              <p><code>createAgentContextSource</code> stores a snapshot and increments its revision only when the accepted block fingerprint changes.</p>
+              <pre><code>updateDocument(blocks) {
+  const nextFingerprint = fingerprint(blocks);
+  if (nextFingerprint === currentFingerprint) {
+    return;
+  }
+
+  currentFingerprint = nextFingerprint;
+  snapshot = { revision: snapshot.revision + 1, blocks };
+  listeners.forEach((listener) =&gt; listener(snapshot));
+}</code></pre>
+            </div>
+            <div class="mini-card">
+              <h3>The feed is event-shaped</h3>
+              <p>The mock feed emits initial suggestions after subscription, then demonstrates updates, retractions, steering, and document-observation suggestions.</p>
+              <pre><code>schedule(() =&gt; {
+  const initial = createInitialSuggestions(sourceLabels, Date.now());
+  initial.forEach((item) =&gt; emit({ type: "suggestion.added", item }));
+  emit({ type: "agent.status", status: "idle" });
+}, 300);</code></pre>
+            </div>
+          </div>
+
+          <p>The inbox reducer is where feed events become UI state. The important behaviour is not just adding items. The reducer also protects selected and active-preview entries when a queue is trimmed or a suggestion is retracted.</p>
+
+          <pre><code><span class="comment">// src/suggestions/inbox.ts</span>
+function enforceLimit(state: InboxState): InboxState {
+  if (state.entries.length &lt;= 30) return state;
+
+  const protectedIds = new Set(
+    [state.selectedId, state.activePreviewId].filter(
+      (id): id is string =&gt; Boolean(id),
+    ),
+  );
+  const evictionOrder = [...state.entries]
+    .filter((entry) =&gt; !protectedIds.has(entry.item.id))
+    .sort((a, b) =&gt; {
+      if (a.viewed !== b.viewed) return a.viewed ? -1 : 1;
+      return a.item.createdAt - b.item.createdAt;
+    });
+  ...
+}</code></pre>
+        </section>
+
+        <section id="preview">
+          <h2>The inline preview is deliberately separate from accepted text</h2>
+          <p>Preview is limited to text suggestions. <code>App.handlePreview</code> exits if another preview is active or the selected item is not a snippet, fact, or term. It also finds an insertion point among accepted blocks only, so existing preview blocks do not become anchors for new previews.</p>
+
+          <pre><code><span class="comment">// src/App.tsx</span>
+const handlePreview = (item: SuggestionItem) =&gt; {
+  if (inbox.activePreviewId || !isTextSuggestion(item)) {
+    return;
+  }
+
+  const acceptedBlocks = editor.document.filter(
+    (block) =&gt; block.type !== "suggestionPreview",
+  );
+  const referenceBlock =
+    acceptedBlocks.find((block) =&gt; block.id === lastActiveBlockId) ??
+    acceptedBlocks.at(-1);
+  if (!referenceBlock) return;
+
+  const preview = editor.insertBlocks(
+    [{
+      type: "suggestionPreview",
+      props: { suggestionId: item.id, targetBlockId: referenceBlock.id },
+      content: item.insertText,
+    }],
+    referenceBlock,
+    "after",
+  )[0];
+
+  if (preview) {
+    inbox.previewStarted(item.id);
+    editor.setTextCursorPosition(preview.id, "end");
+    ...
+  }
+};</code></pre>
+
+          <p>The custom block in <code>schema.tsx</code> defines what happens when the user accepts or cancels. Accept replaces the preview block with a normal paragraph containing the edited preview content. Cancel removes the preview block and tries to restore the cursor to the original target block.</p>
+
+          <pre><code><span class="comment">// src/editor/schema.tsx</span>
+const suggestionPreviewBlock = createReactBlockSpec(
+  {
+    type: "suggestionPreview",
+    propSchema: {
+      suggestionId: { default: "" },
+      targetBlockId: { default: "" },
+    },
+    content: "inline",
+  },
+  {
+    render: ({ block, editor, contentRef }) =&gt; {
+      const resolve = (outcome: "accepted" | "cancelled") =&gt; {
+        const fullEditor = editor as unknown as BlockNoteEditor;
+        if (outcome === "accepted") {
+          const { insertedBlocks } = fullEditor.replaceBlocks(
+            [block.id],
+            [{ type: "paragraph", content: block.content } as unknown as PartialBlock],
+          );
+          ...
+        } else {
+          fullEditor.removeBlocks([block.id]);
+          ...
+        }
+
+        <span class="hl">emitPreviewResolution({ suggestionId: block.props.suggestionId, outcome });</span>
+      };
+      ...
+    }
+  }
+);</code></pre>
+
+          <div class="callout ok">
+            <strong>Key invariant:</strong> tentative preview text is not sent back to the agent as accepted document context. <code>getAcceptedDocumentBlocks</code> drops any block whose type is <code>suggestionPreview</code> before publishing a document snapshot.
+          </div>
+
+          <pre><code><span class="comment">// src/editor/documentContext.ts</span>
+const current =
+  block.type === "suggestionPreview"
+    ? []
+    : [{ id: block.id, type: block.type, text: contentToText(block.content) }];</code></pre>
+        </section>
+
+        <section id="surface-area">
+          <h2>The important files and what each one owns</h2>
+          <table>
+            <thead><tr><th>File</th><th>Role in the new behaviour</th></tr></thead>
+            <tbody>
+              <tr><td><code>src/App.tsx</code></td><td>Owns the editor, context source, mock feed, inbox hook, drawer state, steering focus, editor change handlers, and preview insertion.</td></tr>
+              <tr><td><code>src/components/SuggestionDock.tsx</code></td><td>Renders queue and detail views, steering form, status/error states, source labels, structure trees, Mermaid mind maps, and preview/dismiss controls.</td></tr>
+              <tr><td><code>src/suggestions/inbox.ts</code></td><td>Reducer and hook for suggestion queue state. Handles dedupe, max queue size, viewed state, active preview, stale/withdrawn states, sorting, and commands.</td></tr>
+              <tr><td><code>src/suggestions/mockSuggestionFeed.ts</code></td><td>Mock event source. Produces initial suggestions, delayed update/retraction, steering responses, and document-change observations.</td></tr>
+              <tr><td><code>src/editor/schema.tsx</code></td><td>Adds the custom BlockNote preview block and implements accept/cancel behaviour.</td></tr>
+              <tr><td><code>src/editor/documentContext.ts</code></td><td>Converts BlockNote blocks into text snapshots, excluding previews.</td></tr>
+              <tr><td><code>src/components/MermaidDiagram.tsx</code></td><td>Lazily imports Mermaid for mind-map suggestions and falls back to accessible text if rendering fails.</td></tr>
+              <tr><td><code>vite.config.ts</code>, <code>package.json</code></td><td>Add Vitest/jsdom test setup plus Mermaid and Testing Library dependencies.</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="risks">
+          <h2>What future maintainers should keep in their heads</h2>
+          <div class="grid-2">
+            <div class="callout warn">
+              <strong>Only one preview can be active.</strong> The dock disables preview when <code>activePreviewId</code> exists, and <code>App.handlePreview</code> also refuses to insert another. If a future code path inserts preview blocks directly, it must update the inbox state or this invariant breaks.
+            </div>
+            <div class="callout warn">
+              <strong>Preview resolution travels through a module-level event bus.</strong> <code>schema.tsx</code> cannot call the React inbox hook directly, so it emits through <code>previewEvents.ts</code>. The app subscribes in an effect. This is small and contained, but it depends on cleanup being correct when the app unmounts or hot reloads.
+            </div>
+            <div class="callout warn">
+              <strong>Accepted suggestions lose suggestion metadata.</strong> Accept replaces the preview with a plain paragraph. That is consistent with the current code, but future analytics or provenance features would need a different persistence path.</n            </div>
+            <div class="callout warn">
+              <strong>Mermaid changes bundle shape.</strong> The component uses <code>import("mermaid")</code>, but the production build still reported several large chunks and one large app chunk. Build passed, but this is a performance area to watch.</div>
+          </div>
+        </section>
+
+        <section id="tests">
+          <h2>The test suite now covers the agent state model</h2>
+          <p>Vitest is now configured with jsdom and a cleanup setup file. Four test files were added, and <code>npm test</code> passed with 6 tests.</p>
+          <ul>
+            <li><code>SuggestionDock.test.tsx</code> checks that the dock is one unified stream, not a tabbed gutter, and that text-detail view can request a preview.</li>
+            <li><code>inbox.test.ts</code> checks dedupe, the 30-item cap, and stale/withdrawn handling when an active preview is updated and retracted.</li>
+            <li><code>contextSource.test.ts</code> checks that unchanged block snapshots do not publish extra revisions.</li>
+            <li><code>mockSuggestionFeed.test.ts</code> checks initial events, steering events, document-observation events, and timer cleanup after unsubscribe.</li>
+          </ul>
+          <div class="callout">
+            <strong>Coverage gap to know about:</strong> the custom BlockNote preview block's accept/cancel DOM behaviour is not directly tested here. That path is exercised by app behaviour manually or by build-time type checks, but there is no dedicated automated test for replacing a preview with a paragraph or restoring cursor position.
+          </div>
+        </section>
+
+        <section id="questions" class="quiz">
+          <h2>Pause here: can you reason through the new path?</h2>
+
+          <details>
+            <summary>1. A user clicks "Preview in document" on a mind-map suggestion. What should happen?</summary>
+            <p>Nothing should be inserted. <code>App.handlePreview</code> calls <code>isTextSuggestion</code>, which only accepts <code>snippet</code>, <code>fact</code>, and <code>term</code>. The dock also only renders the preview button for text suggestions.</p>
+          </details>
+
+          <details>
+            <summary>2. Why does <code>getAcceptedDocumentBlocks</code> skip <code>suggestionPreview</code> blocks?</summary>
+            <p>Because preview text is tentative. The agent context should reflect accepted document content, not a draft suggestion the user may cancel or edit before accepting.</p>
+          </details>
+
+          <details>
+            <summary>3. What would break if preview resolution did not call <code>emitPreviewResolution</code>?</summary>
+            <p>The editor block would still be accepted or removed, but the inbox would keep <code>activePreviewId</code> set. That would block later previews and leave the suggestion entry in the wrong state.</p>
+          </details>
+
+          <details>
+            <summary>4. When the queue exceeds 30 entries, which suggestions are protected from eviction?</summary>
+            <p>The currently selected suggestion and the active-preview suggestion are protected. The reducer builds <code>protectedIds</code> from <code>selectedId</code> and <code>activePreviewId</code> before choosing old viewed entries for eviction.</p>
+          </details>
+
+          <details>
+            <summary>5. Where would you start debugging if document-change suggestions stop appearing?</summary>
+            <p>Start at <code>App.handleEditorChange</code> and <code>contextSource.updateDocument(getAcceptedDocumentBlocks(editor))</code>. Then check whether <code>createMockSuggestionFeed</code> subscribed to <code>context.subscribeToDocument</code> and whether the snapshot fingerprint is actually changing.</p>
+          </details>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

@@ -7,6 +7,7 @@ type ResponsiveDrawerProps = {
   open: boolean;
   side: "left" | "right";
   title: string;
+  wide?: boolean;
   onClose: () => void;
 };
 
@@ -16,6 +17,7 @@ export function ResponsiveDrawer({
   open,
   side,
   title,
+  wide = false,
   onClose,
 }: ResponsiveDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -85,7 +87,11 @@ export function ResponsiveDrawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${id}-title`}
-        className={`absolute inset-y-0 flex h-dvh w-[min(22.5rem,calc(100vw-3rem))] flex-col overflow-hidden bg-[#f4f2fd] shadow-2xl ${
+        className={`absolute inset-y-0 flex h-dvh flex-col overflow-hidden bg-[#f4f2fd] shadow-2xl ${
+          wide
+            ? "w-full sm:w-[min(40rem,calc(100vw-3rem))]"
+            : "w-[min(22.5rem,calc(100vw-3rem))]"
+        } ${
           side === "left" ? "left-0" : "right-0"
         }`}
       >

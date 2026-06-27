@@ -1,12 +1,19 @@
-import type { BlockNoteEditor } from "@blocknote/core";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
 
+import type { WritingEditor } from "../editor/schema";
+
 type DocumentEditorProps = {
-  editor: BlockNoteEditor;
+  editor: WritingEditor;
+  onChange: () => void;
+  onSelectionChange: () => void;
 };
 
-export function DocumentEditor({ editor }: DocumentEditorProps) {
+export function DocumentEditor({
+  editor,
+  onChange,
+  onSelectionChange,
+}: DocumentEditorProps) {
   return (
     <section
       aria-label="Document editor"
@@ -18,6 +25,8 @@ export function DocumentEditor({ editor }: DocumentEditorProps) {
           theme="light"
           aria-label="Editable draft content"
           data-editor-surface
+          onChange={onChange}
+          onSelectionChange={onSelectionChange}
         />
       </div>
     </section>
