@@ -1,21 +1,21 @@
 import { randomUUID } from "node:crypto";
 
 import { Agent, type AgentEvent, type AgentTool } from "@earendil-works/pi-agent-core";
-import { getModel, type Api, type Model } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 
+import {
+  resolveAgentModel,
+  resolveConfiguredApiKey,
+  type AgentModelConfig,
+} from "./agent-config.js";
 import type {
   ObservationSeed,
   ProjectContentItem,
-  ProviderSettings,
 } from "../src/shared/desktop.js";
 import type { SuggestionItem, SuggestionKind } from "../src/suggestions/types.js";
 
 type ParentMessage =
-  | { kind: "configure"; provider: ProviderSettings; apiKey: string }
-  | { kind: "observe"; seed: ObservationSeed; apiKey: string; force: boolean }
-  | { kind: "abort" }
-  | { kind: "resume" }
+  | { kind: "observe"; seed: ObservationSeed; config: AgentModelConfig; force: boolean }
   | { kind: "storage.result"; id: string; result?: unknown; error?: string };
 
 type ObservationRequest = Extract<ParentMessage, { kind: "observe" }>;
@@ -24,16 +24,7 @@ const pendingStorage = new Map<
   string,
   { resolve: (value: unknown) => void; reject: (error: Error) => void }
 >();
-let providerSettings: ProviderSettings = {
-  provider: "anthropic",
-  model: "claude-sonnet-4-6",
-  baseUrl: "",
-  enabled: false,
-};
-let configuredApiKey = "";
-let activeAgent: Agent | undefined;
 let running = false;
-let paused = false;
 let queued: ObservationRequest | undefined;
 let lastCompletedRevision = -1;
 
@@ -243,32 +234,6 @@ function createTools(seed: ObservationSeed): AgentTool[] {
   return [list, read, search, listSuggestions, create, update, retract, memory];
 }
 
-function resolveModel(settings: ProviderSettings): Model<Api> {
-  const lookup = getModel as unknown as (
-    provider: string,
-    model: string,
-  ) => Model<Api> | undefined;
-  const known = lookup(settings.provider, settings.model);
-  if (!known) {
-    if (!settings.baseUrl) {
-      throw new Error(`Unknown model ${settings.provider}/${settings.model}`);
-    }
-    return {
-      id: settings.model,
-      name: settings.model,
-      provider: settings.provider,
-      api: settings.provider === "anthropic" ? "anthropic-messages" : "openai-completions",
-      baseUrl: settings.baseUrl,
-      reasoning: false,
-      input: ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 128_000,
-      maxTokens: 16_384,
-    };
-  }
-  return settings.baseUrl ? { ...known, baseUrl: settings.baseUrl } : known;
-}
-
 function serializable(event: AgentEvent) {
   try {
     return JSON.parse(JSON.stringify(event)) as unknown;
@@ -279,17 +244,18 @@ function serializable(event: AgentEvent) {
 
 async function perform(request: ObservationRequest) {
   const { seed } = request;
-  const settings = seed.provider;
+  const settings = request.config;
   const runId = randomUUID();
   running = true;
   runtime({ running: true, configured: true, lastError: undefined });
   try {
-    const model = resolveModel(settings);
+    const model = resolveAgentModel(settings);
+    const apiKey = resolveConfiguredApiKey(settings);
     await storageCall("agent.run.start", {
       id: runId,
       seed,
-      provider: settings.provider,
-      model: settings.model,
+      provider: settings.provider.id,
+      model: settings.model.id,
     });
     const agent = new Agent({
       initialState: {
@@ -298,10 +264,9 @@ async function perform(request: ObservationRequest) {
         tools: createTools(seed),
         systemPrompt: `You are ScribeAI's background writing partner. Analyze the active document in the context of its project. Use project tools to read relevant material. Create only concrete, high-value suggestions; do not edit document content. Avoid duplicating existing suggestions. Before finishing, call save_document_memory with a concise summary for the next observation.\n\nPrevious document memory:\n${seed.memorySummary || "No previous memory."}`,
       },
-      getApiKey: () => request.apiKey || configuredApiKey || undefined,
+      getApiKey: () => apiKey,
       toolExecution: "sequential",
     });
-    activeAgent = agent;
     agent.subscribe(async (event) => {
       await storageCall("agent.run.transcript", {
         runId,
@@ -334,13 +299,11 @@ async function perform(request: ObservationRequest) {
     }).catch(() => undefined);
     runtime({ running: false, lastError: message });
   } finally {
-    activeAgent = undefined;
     running = false;
   }
 }
 
 async function drain(request: ObservationRequest) {
-  if (paused) return;
   if (running) {
     queued = request;
     return;
@@ -349,7 +312,7 @@ async function drain(request: ObservationRequest) {
   await perform(request);
   const next = queued;
   queued = undefined;
-  if (next && !paused && next.seed.projectRevision !== lastCompletedRevision) {
+  if (next && next.seed.projectRevision !== lastCompletedRevision) {
     await drain(next);
   }
 }
@@ -363,25 +326,7 @@ process.parentPort?.on("message", ({ data }: { data: ParentMessage }) => {
     else request.resolve(data.result);
     return;
   }
-  if (data.kind === "configure") {
-    providerSettings = data.provider;
-    configuredApiKey = data.apiKey;
-    runtime({ configured: providerSettings.enabled });
-    return;
-  }
-  if (data.kind === "abort") {
-    paused = true;
-    queued = undefined;
-    activeAgent?.abort();
-    return;
-  }
-  if (data.kind === "resume") {
-    paused = false;
-    return;
-  }
   if (data.kind === "observe") {
-    providerSettings = data.seed.provider;
-    configuredApiKey = data.apiKey;
     void drain(data);
   }
 });

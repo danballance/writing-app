@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Comprehension review: Electron runtime and persisted development suggestions</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #20212b;
+      --muted: #656173;
+      --paper: #fbfaff;
+      --card: #ffffff;
+      --line: #dedbea;
+      --soft: #f1effa;
+      --accent: #6750d8;
+      --accent-2: #0f766e;
+      --warn: #9a3412;
+      --code-bg: #171822;
+      --code-ink: #f4f2ff;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(103, 80, 216, 0.10), transparent 32rem),
+        var(--paper);
+      color: var(--ink);
+      font: 16px/1.65 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 48px 24px 72px;
+    }
+
+    header.hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 28px;
+      align-items: start;
+      margin-bottom: 28px;
+    }
+
+    .eyebrow {
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 { line-height: 1.15; margin: 0; }
+    h1 { font-size: clamp(2rem, 5vw, 4.2rem); letter-spacing: -0.055em; max-width: 880px; }
+    h2 { font-size: clamp(1.45rem, 3vw, 2.2rem); letter-spacing: -0.035em; margin-top: 44px; }
+    h3 { font-size: 1.08rem; margin-top: 24px; }
+    p { margin: 0.85rem 0 0; max-width: 74ch; }
+
+    .lead {
+      font-size: 1.08rem;
+      color: var(--muted);
+      max-width: 820px;
+    }
+
+    .card, .note, .quiz, .history {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.84);
+      border-radius: 22px;
+      box-shadow: 0 18px 55px rgba(48, 42, 82, 0.08);
+    }
+
+    .card { padding: 22px; }
+    .sidecard { position: sticky; top: 18px; }
+    .sidecard ul { padding-left: 1.1rem; margin: 0.8rem 0 0; color: var(--muted); }
+    .sidecard li { margin: 0.35rem 0; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .tile {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 18px;
+      padding: 18px;
+    }
+
+    .tile .label {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .tile p { font-size: 0.94rem; color: var(--muted); }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 10px;
+      margin: 22px 0;
+    }
+
+    .step {
+      min-height: 92px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 18px;
+      padding: 14px;
+      position: relative;
+    }
+
+    .step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: -8px;
+      top: 50%;
+      width: 14px;
+      height: 2px;
+      background: var(--line);
+    }
+
+    .step b { display: block; font-size: 0.92rem; }
+    .step span { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 6px; }
+
+    pre {
+      margin: 16px 0 0;
+      overflow: auto;
+      border-radius: 18px;
+      background: var(--code-bg);
+      color: var(--code-ink);
+      padding: 18px;
+      font: 0.9rem/1.55 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+    }
+
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    p code, li code, td code { background: var(--soft); padding: 0.1rem 0.3rem; border-radius: 6px; }
+    mark {
+      background: rgba(20, 184, 166, 0.18);
+      color: inherit;
+      padding: 0.02rem 0.16rem;
+      border-radius: 4px;
+    }
+
+    .twocol {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 0.72fr);
+      gap: 22px;
+      align-items: start;
+      margin-top: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      overflow: hidden;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    th, td { padding: 12px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+    th { text-align: left; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); background: #f6f4fd; }
+    tr:last-child td { border-bottom: 0; }
+
+    .note {
+      padding: 18px 20px;
+      margin-top: 18px;
+      border-left: 5px solid var(--accent-2);
+    }
+    .note.warn { border-left-color: var(--warn); }
+    .note p { margin-top: 0.35rem; }
+
+    .history { padding: 18px 20px; margin-top: 18px; }
+    .history ol { margin: 0.7rem 0 0; padding-left: 1.2rem; color: var(--muted); }
+
+    details {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+    summary { cursor: pointer; font-weight: 750; }
+    details p { color: var(--muted); }
+
+    .quiz { padding: 22px; margin-top: 24px; }
+    .checks { color: var(--muted); }
+
+    footer { margin-top: 40px; color: var(--muted); font-size: 0.92rem; }
+
+    @media (max-width: 900px) {
+      header.hero, .twocol { grid-template-columns: 1fr; }
+      .sidecard { position: static; }
+      .grid, .flow { grid-template-columns: 1fr; }
+      .step::after { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <div class="eyebrow">Comprehension review</div>
+        <h1>Electron is now the required runtime, and mock suggestions enter through the persisted desktop path.</h1>
+        <p class="lead">This change removes the browser-only mock feed and makes development behave more like the packaged app: Vite still serves the renderer, but Electron owns the bridge, windows, storage, and suggestion delivery.</p>
+      </div>
+      <aside class="card sidecard" aria-label="Review focus">
+        <h3>Read this when you need to touch</h3>
+        <ul>
+          <li>renderer bootstrap in <code>src/main.tsx</code></li>
+          <li>the app composition boundary in <code>src/App.tsx</code></li>
+          <li>mock suggestion injection</li>
+          <li>Electron build and development startup</li>
+        </ul>
+      </aside>
+    </header>
+
+    <section class="grid" aria-label="Main behavioral areas changed">
+      <article class="tile">
+        <div class="label">Runtime boundary</div>
+        <p><code>App</code> no longer has a browser fallback. It receives a required <code>DesktopBridge</code>; missing preload produces a diagnostic page.</p>
+      </article>
+      <article class="tile">
+        <div class="label">Development suggestions</div>
+        <p>The old <code>BroadcastChannel</code> mock feed is gone. A development menu opens an Electron window that writes suggestions through IPC and storage.</p>
+      </article>
+      <article class="tile">
+        <div class="label">Build path</div>
+        <p><code>vite-plugin-electron</code> replaces the hand-written <code>desktop/build.mjs</code> esbuild script and participates in <code>npm run dev</code> and <code>npm run build</code>.</p>
+      </article>
+    </section>
+
+    <section>
+      <h2>The boundary that moved: browser page to Electron renderer</h2>
+      <p>The most important interface change is small in code but broad in behavior. <code>getDesktopBridge</code> used to return <code>undefined</code>, and <code>App</code> selected either the Electron feed or the injected mock feed. Now missing <code>window.scribe</code> is an error handled before <code>App</code> is constructed.</p>
+
+      <div class="twocol">
+        <div>
+<pre><code>// src/desktop/desktopClient.ts
+export function getDesktopBridge(): DesktopBridge {
+  const bridge = window.scribe;
+  if (!bridge) {
+    throw new Error("ScribeAI requires the Electron desktop runtime.");
+  }
+  return bridge;
+}</code></pre>
+
+<pre><code>// src/main.tsx
+try {
+  const desktop = getDesktopBridge();
+  if (normalizedPath === MOCK_SUGGESTION_PATH) {
+    const development = window.scribeDevelopment;
+    rootView =
+      MockSuggestionController &amp;&amp; development ? (
+        &lt;Suspense fallback={null}&gt;
+          &lt;MockSuggestionController
+            createSuggestion={development.createSuggestion}
+          /&gt;
+        &lt;/Suspense&gt;
+      ) : (
+        &lt;RuntimeRequired message="The mock suggestion controller is only available from the Electron development menu." /&gt;
+      );
+  } else {
+    rootView = &lt;App desktop={desktop} /&gt;;
+  }
+} catch (error) {
+  rootView = &lt;RuntimeRequired message={...} /&gt;;
+}</code></pre>
+        </div>
+        <aside class="note">
+          <h3>What to notice</h3>
+          <p><code>RuntimeRequired</code> is not a fallback runtime. It prevents the app from running without the preload bridge. That means a direct browser visit to the Vite URL no longer exercises the real application path.</p>
+          <p>The mock controller is also lazy-loaded only under <code>import.meta.env.DEV</code>, so production builds do not include the controller route as an enabled feature.</p>
+        </aside>
+      </div>
+
+      <p>Inside <code>App</code>, the optional checks around <code>desktop</code> are removed. Hydration, autosave, provider configuration, source import, agent controls, and suggestion-state persistence now assume the bridge exists.</p>
+<pre><code>// src/App.tsx
+type AppProps = {
+  desktop: DesktopBridge;
+};
+
+export default function App({ desktop }: AppProps) {
+  ...
+  const feed = useMemo(() =&gt; createDesktopSuggestionFeed(desktop), [desktop]);
+  const saveSuggestionState = useCallback(
+    (state: PersistedSuggestionState) =&gt; {
+      void desktop.saveSuggestionState(state);
+    },
+    [desktop],
+  );
+  ...
+  const documentHydratedRef = useRef(false);
+}</code></pre>
+      <p>The invariant after this change: if <code>App</code> is mounted, Electron IPC must be available. Any future browser-only test harness or Storybook-like environment will need to provide a fake <code>DesktopBridge</code> rather than relying on optional behavior in <code>App</code>.</p>
+    </section>
+
+    <section>
+      <h2>Follow one mock suggestion through the new path</h2>
+      <p>The old path was live-only: controller tab -> <code>BroadcastChannel</code> -> injected feed -> inbox. The new path writes through the same persistence boundary as agent suggestions before the renderer sees the event.</p>
+
+      <div class="flow" aria-label="New development suggestion data flow">
+        <div class="step"><b>Development menu</b><span>Electron main opens one <code>/mock-suggestions</code> window.</span></div>
+        <div class="step"><b>Preload bridge</b><span><code>window.scribeDevelopment.createSuggestion</code> invokes IPC.</span></div>
+        <div class="step"><b>Main validation</b><span>Payload must pass <code>isSuggestionItem</code>.</span></div>
+        <div class="step"><b>Storage commit</b><span>Suggestion is stored at current document revision.</span></div>
+        <div class="step"><b>Desktop event</b><span>Committed event reaches the normal inbox feed.</span></div>
+      </div>
+
+      <h3>The window and IPC gate live in Electron main</h3>
+<pre><code>// desktop/main.ts
+const developmentServerUrl = process.env.VITE_DEV_SERVER_URL;
+const isDevelopment = Boolean(developmentServerUrl);
+let mockSuggestionWindow: BrowserWindow | undefined;
+
+if (isDevelopment) {
+  ipcMain.handle(
+    "scribe:development.suggestion.create",
+    async (event, item: unknown) =&gt; {
+      if (!validateSender(event.sender)) throw new Error("Unknown renderer");
+      if (!isSuggestionItem(item)) {
+        throw new Error("Invalid development suggestion");
+      }
+      return storage.call("development.suggestion.create", { item });
+    },
+  );
+}</code></pre>
+
+<pre><code>// desktop/main.ts
+function openMockSuggestionWindow() {
+  if (!developmentServerUrl) return;
+  if (mockSuggestionWindow &amp;&amp; !mockSuggestionWindow.isDestroyed()) {
+    mockSuggestionWindow.focus();
+    return;
+  }
+
+  const window = new BrowserWindow({
+    title: "ScribeAI Mock Suggestions",
+    webPreferences: {
+      preload: join(here, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      additionalArguments: ["--scribe-development"],
+    },
+  });
+  mockSuggestionWindow = window;
+  void window.loadURL(new URL("/mock-suggestions", developmentServerUrl).toString());
+}</code></pre>
+
+      <h3>The bridge is explicit and development-scoped</h3>
+<pre><code>// desktop/preload.ts
+contextBridge.exposeInMainWorld("scribe", bridge);
+
+if (process.argv.includes("--scribe-development")) {
+  const developmentBridge: DesktopDevelopmentBridge = {
+    createSuggestion: (item: SuggestionItem) =&gt;
+      ipcRenderer.invoke("scribe:development.suggestion.create", item),
+  };
+  contextBridge.exposeInMainWorld("scribeDevelopment", developmentBridge);
+}</code></pre>
+
+      <h3>Storage deliberately pins the mock suggestion to the current document revision</h3>
+<pre><code>// desktop/storage.ts
+function createDevelopmentSuggestion(params: unknown) {
+  const item = (params as { item?: unknown }).item;
+  if (!isSuggestionItem(item)) {
+    throw new Error("Invalid development suggestion");
+  }
+  return createSuggestion({
+    item,
+    expectedDocumentRevision: getDocument().revision,
+  });
+}</code></pre>
+
+      <aside class="note warn">
+        <h3>Risk worth carrying in your head</h3>
+        <p>The development bridge is guarded by <code>VITE_DEV_SERVER_URL</code> in main and by <code>--scribe-development</code> in preload. During development, the workspace window also receives that argument, so any dev Electron renderer window with the exposed bridge can call the development IPC. The handler still validates shape and sender, and it is not registered in production. Treat it as a dev convenience, not a security boundary.</p>
+      </aside>
+    </section>
+
+    <section>
+      <h2>The validation code moved from mock-only to shared runtime code</h2>
+      <p>The deleted <code>src/dev/mockSuggestions/mockSuggestionValidation.ts</code> logic is reintroduced as <code>src/suggestions/validation.ts</code>. That matters because the validator is now imported by three layers: mock draft building, Electron main, and storage.</p>
+
+<pre><code>// src/suggestions/validation.ts
+export function isSuggestionItem(value: unknown): value is SuggestionItem {
+  if (!isRecord(value)) return false;
+
+  const hasCommonFields =
+    isNonEmptyString(value.id) &amp;&amp;
+    isNonEmptyString(value.dedupeKey) &amp;&amp;
+    isNonEmptyString(value.title) &amp;&amp;
+    isNonEmptyString(value.summary) &amp;&amp;
+    isNonEmptyString(value.body) &amp;&amp;
+    Array.isArray(value.sourceLabels) &amp;&amp;
+    value.sourceLabels.every((label) =&gt; typeof label === "string") &amp;&amp;
+    typeof value.createdAt === "number" &amp;&amp;
+    Number.isFinite(value.createdAt);
+
+  if (!hasCommonFields) return false;
+
+  if (value.kind === "snippet" || value.kind === "fact" || value.kind === "term") {
+    return isNonEmptyString(value.insertText);
+  }
+
+  if (value.kind === "outline" || value.kind === "layout") {
+    return isStructureNodes(value.nodes);
+  }
+
+  if (value.kind === "mindMap") {
+    return isNonEmptyString(value.mermaidSource) &amp;&amp;
+      isNonEmptyString(value.accessibleDescription);
+  }
+
+  return false;
+}</code></pre>
+
+      <p>This is a runtime validator, not a schema migration. It checks the current <code>SuggestionItem</code> shape before IPC reaches storage. If a new suggestion kind or required field is added later, this file must change along with <code>src/suggestions/types.ts</code>, the mock draft builder, and any storage paths that accept unknown input.</p>
+    </section>
+
+    <section>
+      <h2>The controller now reports persistence outcomes, not channel availability</h2>
+      <p><code>MockSuggestionController</code> no longer opens or closes a publisher. It receives a <code>createSuggestion</code> function from the bootstrap layer, disables repeat submission while IPC is pending, and distinguishes duplicate rejection from success.</p>
+
+<pre><code>// src/dev/mockSuggestions/MockSuggestionController.tsx
+type MockSuggestionControllerProps = {
+  createSuggestion: (
+    item: SuggestionItem,
+  ) =&gt; Promise&lt;{ accepted: boolean }&gt;;
+};
+
+const submitSuggestion = async (event: FormEvent&lt;HTMLFormElement&gt;) =&gt; {
+  event.preventDefault();
+  ...
+  setSubmitting(true);
+  setMessage(undefined);
+  try {
+    const suggestion = buildMockSuggestion(draft);
+    const result = await createSuggestion(suggestion);
+    if (!result.accepted) {
+      throw new Error("The suggestion was rejected as a duplicate.");
+    }
+    formRef.current?.reset();
+    setKind("snippet");
+    setMessage({
+      type: "success",
+      text: `Added “${suggestion.title}” to the persisted suggestion inbox.`,
+    });
+  } catch (error) {
+    ...
+  } finally {
+    setSubmitting(false);
+  }
+};</code></pre>
+
+      <p>The tests now follow that contract. There is no longer a feed lifecycle test for the deleted <code>BroadcastChannel</code> adapter; instead, coverage splits between the React controller callback and storage persistence.</p>
+
+      <table>
+        <thead><tr><th>Test area</th><th>What changed</th></tr></thead>
+        <tbody>
+          <tr><td><code>MockSuggestionController.test.tsx</code></td><td>Asserts the controller calls <code>createSuggestion</code>, shows duplicate rejection, and disables the submit button while the promise is pending.</td></tr>
+          <tr><td><code>desktop/storage.test.ts</code></td><td>Adds durable coverage for <code>development.suggestion.create</code> and verifies hydration contains the injected item.</td></tr>
+          <tr><td>Deleted feed tests</td><td><code>createInjectedSuggestionFeed.test.ts</code> disappears with the channel adapter, so live-only browser delivery is no longer a protected behavior.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Build ownership moved into Vite</h2>
+      <p>The old <code>desktop/build.mjs</code> called esbuild directly for main, storage, agent, and preload entries. The new config makes Vite own those Electron builds through <code>vite-plugin-electron/simple</code>.</p>
+
+<pre><code>// package.json
+"scripts": {
+  "dev": "vite",
+  "build": "tsc -b &amp;&amp; tsc -p tsconfig.desktop.json --noEmit &amp;&amp; vite build",
+  "desktop": "npm run build &amp;&amp; electron ."
+}</code></pre>
+
+<pre><code>// vite.config.ts
+plugins: [
+  cleanElectronOutput(),
+  react(),
+  tailwindcss(),
+  electron({
+    main: {
+      entry: {
+        main: "desktop/main.ts",
+        storage: "desktop/storage.ts",
+        agent: "desktop/agent.ts",
+      },
+      vite: {
+        plugins: [notBundle({ filter: /^(?![./])/ })],
+      },
+    },
+    preload: {
+      input: fileURLToPath(new URL("./desktop/preload.ts", import.meta.url)),
+      vite: {
+        build: {
+          rolldownOptions: {
+            output: { entryFileNames: "preload.cjs" },
+          },
+        },
+      },
+    },
+  }),
+]</code></pre>
+
+      <p>The lockfile reflects the same intent: <code>esbuild</code> is removed as a direct dev dependency and <code>vite-plugin-electron</code> is added. The custom <code>cleanElectronOutput</code> plugin removes <code>dist-electron</code> at production build config resolution, so stale Electron entry outputs are less likely to survive a build.</p>
+    </section>
+
+    <section>
+      <h2>How this fits the recent history</h2>
+      <div class="history">
+        <ol>
+          <li><code>4c96792</code> introduced the temporary <code>/mock-suggestions</code> route, controller UI, validation, and browser channel.</li>
+          <li><code>9538f0b</code> consolidated mock event injection behind the injected feed.</li>
+          <li><code>65d1cd5</code> added Electron persistence, Pi agent utility processes, preload IPC, and the earlier desktop build script.</li>
+        </ol>
+        <p>This diff appears to resolve the overlap left by those steps: the temporary browser channel is removed now that Electron persistence exists, and Vite development is made to run through Electron rather than beside it.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Files that carry the behavioral change</h2>
+      <table>
+        <thead><tr><th>Area</th><th>Files</th><th>Role in the new model</th></tr></thead>
+        <tbody>
+          <tr><td>Renderer bootstrap</td><td><code>src/main.tsx</code>, <code>src/components/RuntimeRequired.tsx</code>, <code>src/vite-env.d.ts</code></td><td>Require Electron bridge, gate the development controller route, and type <code>window.scribeDevelopment</code>.</td></tr>
+          <tr><td>App composition</td><td><code>src/App.tsx</code>, <code>src/desktop/desktopClient.ts</code></td><td>Remove optional desktop behavior and always use <code>createDesktopSuggestionFeed</code>.</td></tr>
+          <tr><td>Development injection</td><td><code>desktop/main.ts</code>, <code>desktop/preload.ts</code>, <code>desktop/storage.ts</code>, <code>src/dev/mockSuggestions/MockSuggestionController.tsx</code></td><td>Create a dev-only window and bridge, validate payloads, persist suggestions, and show submission state.</td></tr>
+          <tr><td>Validation</td><td><code>src/suggestions/validation.ts</code>, <code>src/dev/mockSuggestions/mockSuggestionDraft.ts</code>, <code>tsconfig.desktop.json</code></td><td>Move validation into a shared module that Electron code can type-check and import.</td></tr>
+          <tr><td>Build and docs</td><td><code>vite.config.ts</code>, <code>package.json</code>, <code>package-lock.json</code>, <code>docs/**</code></td><td>Use Vite for Electron builds and update docs, including generated HTML, to describe Electron-only development.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Maintenance notes for the next person</h2>
+      <div class="grid">
+        <article class="tile">
+          <div class="label">Testing signal</div>
+          <p><code>npm test</code> passed locally: 8 files, 34 tests. <code>npm run build</code> also passed, with the existing Vite chunk-size warning.</p>
+        </article>
+        <article class="tile">
+          <div class="label">User data</div>
+          <p>Docs now state development uses the normal Electron <code>userData</code> directory. Mock injection can mutate the same workspace as an installed app if profiles are shared.</p>
+        </article>
+        <article class="tile">
+          <div class="label">Future extension point</div>
+          <p>A new suggestion kind must update the shared validator. Otherwise development IPC and storage will reject payloads that TypeScript might otherwise accept.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="quiz">
+      <h2>Pause and check the model</h2>
+      <p class="checks">These questions focus on behavior you would need while debugging or extending this change.</p>
+
+      <details>
+        <summary>1. If someone opens the Vite dev URL directly in a browser, why does the full app no longer mount?</summary>
+        <p><code>getDesktopBridge</code> throws when <code>window.scribe</code> is absent. <code>src/main.tsx</code> catches that and renders <code>RuntimeRequired</code> instead of <code>App</code>. <code>App</code> now requires a <code>DesktopBridge</code> prop and no longer builds a mock feed fallback.</p>
+      </details>
+
+      <details>
+        <summary>2. Where does a mock suggestion become durable?</summary>
+        <p>In <code>desktop/storage.ts</code>, <code>development.suggestion.create</code> calls <code>createDevelopmentSuggestion</code>, which validates the item and then calls <code>createSuggestion</code> with <code>expectedDocumentRevision: getDocument().revision</code>. The storage test hydrates afterward and expects the item in the persisted suggestions projection.</p>
+      </details>
+
+      <details>
+        <summary>3. What would break if <code>src/suggestions/validation.ts</code> were not included in <code>tsconfig.desktop.json</code>?</summary>
+        <p>Electron's TypeScript project imports that validator from <code>desktop/main.ts</code> and <code>desktop/storage.ts</code>. Without including it, the desktop type-check could miss or reject the shared source dependency, depending on TypeScript project settings. The diff explicitly adds the file to the desktop project include list.</p>
+      </details>
+
+      <details>
+        <summary>4. Why does the controller test inject a function instead of asserting on <code>BroadcastChannel</code>?</summary>
+        <p>The controller no longer owns transport setup. Its boundary is now <code>createSuggestion(item): Promise&lt;{ accepted: boolean }&gt;</code>, supplied by the Electron development bridge at bootstrap. Channel publication and unsubscribe cleanup are obsolete because the channel files were deleted.</p>
+      </details>
+
+      <details>
+        <summary>5. If a development suggestion is rejected as a duplicate, which layer reports that to the user?</summary>
+        <p>Storage returns <code>{ accepted: false }</code> through the development IPC path. <code>MockSuggestionController</code> checks that result and throws <code>"The suggestion was rejected as a duplicate."</code>, then renders it in an alert message.</p>
+      </details>
+    </section>
+
+    <footer>
+      Generated from the current working-tree diff and recent commits. Claims about behavior are based on the changed files shown above; intent beyond that is described as inference from the diff and docs updates.
+    </footer>
+  </main>
+</body>
+</html>

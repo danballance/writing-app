@@ -62,6 +62,29 @@ describe("desktop storage service", () => {
     expect(hydrated.suggestions.seenKeys[item.dedupeKey]).toBe(true);
   });
 
+  it("persists development suggestions against the current document revision", async () => {
+    const item: TextSuggestion = {
+      id: "development-suggestion",
+      dedupeKey: "development-suggestion",
+      kind: "fact",
+      title: "Development fact",
+      summary: "Injected through the Electron development bridge.",
+      body: "This follows the same persisted projection as an agent suggestion.",
+      insertText: "A deterministic development suggestion.",
+      sourceLabels: ["Development tool"],
+      createdAt: 11,
+    };
+
+    await handleStorageRequest("development.suggestion.create", { item });
+    const hydrated = await handleStorageRequest(
+      "hydrate",
+    ) as WorkspaceSnapshot;
+
+    expect(hydrated.suggestions.entries).toEqual(
+      expect.arrayContaining([expect.objectContaining({ item })]),
+    );
+  });
+
   it("records complete transcript events for a run", async () => {
     const seed = await handleStorageRequest("agent.seed");
     await handleStorageRequest("agent.run.start", {

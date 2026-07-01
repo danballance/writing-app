@@ -113,8 +113,8 @@
 <h2 id="commands">Commands<a class="heading-anchor" href="#commands" aria-label="Link to Commands">#</a></h2><div class="code-block" data-language="bash"><div class="code-block__bar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg><span>Copy</span></button></div><pre><code class="language-bash">npm test
 npm run test:watch
 npm run lint
-npm run build</code></pre></div><p><code>npm run build</code> is also the authoritative type and bundle check. It runs <code>tsc -b</code>, builds the Vite renderer, then type-checks and bundles the Electron main, preload, storage, and agent entries. TypeScript uses strict mode, rejects unused locals and parameters, and disallows fallthrough switch cases.</p>
-<h2 id="current-automated-coverage">Current automated coverage<a class="heading-anchor" href="#current-automated-coverage" aria-label="Link to Current automated coverage">#</a></h2><p>The suite currently contains 34 tests across nine files.</p>
+npm run build</code></pre></div><p><code>npm run build</code> is also the authoritative type and bundle check. It type-checks the renderer and Electron projects, then runs the integrated Vite build for renderer, main, preload, storage, and agent entries. TypeScript uses strict mode, rejects unused locals and parameters, and disallows fallthrough switch cases.</p>
+<h2 id="current-automated-coverage">Current automated coverage<a class="heading-anchor" href="#current-automated-coverage" aria-label="Link to Current automated coverage">#</a></h2><p>The suite currently contains 34 tests across eight files.</p>
 <table>
 <thead>
 <tr>
@@ -127,16 +127,12 @@ npm run build</code></pre></div><p><code>npm run build</code> is also the author
 <td>Dedupe, 30-item eviction, stale/withdrawn previews, frozen pins, workspace transitions, preview resolution, and z-order.</td>
 </tr>
 <tr>
-<td><a href="../../src/dev/mockSuggestions/createInjectedSuggestionFeed.test.ts"><code>dev/mockSuggestions/createInjectedSuggestionFeed.test.ts</code></a></td>
-<td>Channel delivery, malformed-message rejection, and unsubscribe cleanup.</td>
-</tr>
-<tr>
 <td><a href="../../src/dev/mockSuggestions/mockSuggestionDraft.test.ts"><code>dev/mockSuggestions/mockSuggestionDraft.test.ts</code></a></td>
 <td>Common metadata, every kind-specific payload, recursive node JSON, and validation failures.</td>
 </tr>
 <tr>
 <td><a href="../../src/dev/mockSuggestions/MockSuggestionController.test.tsx"><code>dev/mockSuggestions/MockSuggestionController.test.tsx</code></a></td>
-<td>Dynamic fields, form submission/reset, channel publication, and unsupported-browser behavior.</td>
+<td>Dynamic fields, persisted development submission, rejection handling, and pending-state protection.</td>
 </tr>
 <tr>
 <td><a href="../../src/components/SuggestionDock.test.tsx"><code>components/SuggestionDock.test.tsx</code></a></td>
@@ -156,12 +152,12 @@ npm run build</code></pre></div><p><code>npm run build</code> is also the author
 </tr>
 <tr>
 <td><a href="../../desktop/storage.test.ts"><code>desktop/storage.test.ts</code></a></td>
-<td>SQLite bootstrap and revisioned document saves, durable agent suggestions, transcript recording, and searchable source import.</td>
+<td>SQLite bootstrap and revisioned document saves, durable agent/development suggestions, transcript recording, and searchable source import.</td>
 </tr>
 </tbody></table>
 <h3 id="why-reducer-tests-matter-most">Why reducer tests matter most<a class="heading-anchor" href="#why-reducer-tests-matter-most" aria-label="Link to Why reducer tests matter most">#</a></h3><p>The inbox reducer contains the application&#39;s lifecycle invariants and is pure. Any change to dedupe, updates, retractions, selection, previewing, pins, workspace geometry, queue limits, or unread behavior should begin with a reducer case. Component tests should then verify that the correct intent is exposed to users.</p>
-<h3 id="feed-lifecycle-tests">Feed lifecycle tests<a class="heading-anchor" href="#feed-lifecycle-tests" aria-label="Link to Feed lifecycle tests">#</a></h3><p>The mock feed owns a browser channel while it has subscribers. Always unsubscribe and verify no new events arrive; feed cleanup is required for React <code>StrictMode</code> and future reconnection logic.</p>
-<h3 id="geometry-tests">Geometry tests<a class="heading-anchor" href="#geometry-tests" aria-label="Link to Geometry tests">#</a></h3><p>jsdom does not perform layout. Workspace tests mock <code>clientWidth</code> and <code>clientHeight</code>, and pointer-capture methods are stubbed where needed. A passing geometry unit test does not replace browser testing for actual scroll, resizing, and pointer behavior.</p>
+<h3 id="development-injection-tests">Development injection tests<a class="heading-anchor" href="#development-injection-tests" aria-label="Link to Development injection tests">#</a></h3><p>The controller test injects a callback rather than Electron IPC. Storage tests protect durable development suggestion behavior; manually confirm the development-only preload and main-process gates in Electron.</p>
+<h3 id="geometry-tests">Geometry tests<a class="heading-anchor" href="#geometry-tests" aria-label="Link to Geometry tests">#</a></h3><p>jsdom does not perform layout. Workspace tests mock <code>clientWidth</code> and <code>clientHeight</code>, and pointer-capture methods are stubbed where needed. A passing geometry unit test does not replace Electron renderer testing for actual scroll, resizing, and pointer behavior.</p>
 <h2 id="what-is-not-covered-automatically">What is not covered automatically<a class="heading-anchor" href="#what-is-not-covered-automatically" aria-label="Link to What is not covered automatically">#</a></h2><p>The current suite does not render the full <code>App</code> or BlockNote editor. It therefore does not directly verify:</p>
 <ul>
 <li>preview block insertion, editing, accepting, or cancellation;</li>
@@ -219,11 +215,15 @@ npm run build</code></pre></div><p><code>npm run build</code> is also the author
 <li>Force invalid Mermaid source and confirm the description remains available.</li>
 </ul>
 <h3 id="electron-runtime">Electron runtime<a class="heading-anchor" href="#electron-runtime" aria-label="Link to Electron runtime">#</a></h3><ul>
+<li>Run <code>npm run dev</code> and confirm Electron launches without manually opening the Vite URL.</li>
+<li>Change renderer code and confirm HMR; change main/storage/agent code and confirm Electron restarts; change preload and confirm the renderer reloads.</li>
+<li>Open <strong>Development → Mock suggestions</strong> twice and confirm one controller window is focused rather than duplicated.</li>
+<li>Inject a suggestion, reload, and confirm it remains persisted. Confirm a production launch has no development menu or bridge.</li>
 <li>Launch the built application and confirm the renderer mounts without failed local script or stylesheet requests.</li>
 <li>Edit and restart to verify document hydration and the 650 ms autosave path.</li>
 <li>Import each supported source type; include PDF to exercise the utility-process canvas globals.</li>
-<li>Restart and confirm sources, suggestions, pins, workspace geometry, provider settings, and paused state hydrate from SQLite.</li>
-<li>Confirm an API key is retained only for the current launch and is not restored from the database.</li>
+<li>Restart and confirm sources, suggestions, pins, and workspace geometry hydrate from SQLite.</li>
+<li>Confirm <code>agent.yaml</code> is created once, valid edits take effect after restart, invalid edits leave the agent offline, and environment-backed API keys never enter SQLite or renderer state.</li>
 <li>Force a storage or agent utility-process startup failure and confirm main reports the failure and exits instead of hanging without a window.</li>
 </ul>
 <h2 id="adding-tests">Adding tests<a class="heading-anchor" href="#adding-tests" aria-label="Link to Adding tests">#</a></h2><p>Match the test boundary to the behavior:</p>
@@ -253,7 +253,7 @@ npm run build</code></pre></div><p><code>npm run build</code> is also the author
         <aside class="page-toc" aria-label="On this page">
           <div class="page-toc__inner">
             <h2>On this page</h2>
-            <nav><a class="toc-link toc-link--2" href="#test-stack">Test stack</a><a class="toc-link toc-link--2" href="#commands">Commands</a><a class="toc-link toc-link--2" href="#current-automated-coverage">Current automated coverage</a><a class="toc-link toc-link--3" href="#why-reducer-tests-matter-most">Why reducer tests matter most</a><a class="toc-link toc-link--3" href="#feed-lifecycle-tests">Feed lifecycle tests</a><a class="toc-link toc-link--3" href="#geometry-tests">Geometry tests</a><a class="toc-link toc-link--2" href="#what-is-not-covered-automatically">What is not covered automatically</a><a class="toc-link toc-link--2" href="#manual-regression-checklist">Manual regression checklist</a><a class="toc-link toc-link--3" href="#editor">Editor</a><a class="toc-link toc-link--3" href="#suggestion-lifecycle">Suggestion lifecycle</a><a class="toc-link toc-link--3" href="#preview-lifecycle">Preview lifecycle</a><a class="toc-link toc-link--3" href="#desktop-layout-80rem">Desktop layout ( =80rem)</a><a class="toc-link toc-link--3" href="#below-desktop-80rem">Below desktop (&lt;80rem)</a><a class="toc-link toc-link--3" href="#accessibility">Accessibility</a><a class="toc-link toc-link--3" href="#electron-runtime">Electron runtime</a><a class="toc-link toc-link--2" href="#adding-tests">Adding tests</a><a class="toc-link toc-link--2" href="#pre-handoff-standard">Pre-handoff standard</a></nav>
+            <nav><a class="toc-link toc-link--2" href="#test-stack">Test stack</a><a class="toc-link toc-link--2" href="#commands">Commands</a><a class="toc-link toc-link--2" href="#current-automated-coverage">Current automated coverage</a><a class="toc-link toc-link--3" href="#why-reducer-tests-matter-most">Why reducer tests matter most</a><a class="toc-link toc-link--3" href="#development-injection-tests">Development injection tests</a><a class="toc-link toc-link--3" href="#geometry-tests">Geometry tests</a><a class="toc-link toc-link--2" href="#what-is-not-covered-automatically">What is not covered automatically</a><a class="toc-link toc-link--2" href="#manual-regression-checklist">Manual regression checklist</a><a class="toc-link toc-link--3" href="#editor">Editor</a><a class="toc-link toc-link--3" href="#suggestion-lifecycle">Suggestion lifecycle</a><a class="toc-link toc-link--3" href="#preview-lifecycle">Preview lifecycle</a><a class="toc-link toc-link--3" href="#desktop-layout-80rem">Desktop layout ( =80rem)</a><a class="toc-link toc-link--3" href="#below-desktop-80rem">Below desktop (&lt;80rem)</a><a class="toc-link toc-link--3" href="#accessibility">Accessibility</a><a class="toc-link toc-link--3" href="#electron-runtime">Electron runtime</a><a class="toc-link toc-link--2" href="#adding-tests">Adding tests</a><a class="toc-link toc-link--2" href="#pre-handoff-standard">Pre-handoff standard</a></nav>
             <a class="toc-source" href="../testing-and-quality.md"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h5v5M10 14 20 4"></path><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"></path></svg> View source</a>
           </div>
         </aside>

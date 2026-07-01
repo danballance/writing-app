@@ -2,19 +2,14 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MockSuggestionPublisher } from "./mockSuggestionChannel";
 import { MockSuggestionController } from "./MockSuggestionController";
 
 describe("MockSuggestionController", () => {
-  it("switches kind-specific fields and publishes a validated suggestion", async () => {
+  it("switches kind-specific fields and persists a validated suggestion", async () => {
     const user = userEvent.setup();
-    const publisher: MockSuggestionPublisher = {
-      publish: vi.fn(),
-      close: vi.fn(),
-    };
-    const createPublisher = vi.fn(() => publisher);
-    const { unmount } = render(
-      <MockSuggestionController createPublisher={createPublisher} />,
+    const createSuggestion = vi.fn().mockResolvedValue({ accepted: true });
+    render(
+      <MockSuggestionController createSuggestion={createSuggestion} />,
     );
 
     expect(screen.getByLabelText("Insert text")).toBeTruthy();
@@ -35,7 +30,7 @@ describe("MockSuggestionController", () => {
 
     await user.click(screen.getByRole("button", { name: "Send suggestion" }));
 
-    expect(publisher.publish).toHaveBeenCalledWith(
+    expect(createSuggestion).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: "outline",
         title: "Manual outline",
@@ -49,20 +44,48 @@ describe("MockSuggestionController", () => {
       "snippet",
     );
 
-    unmount();
-    expect(publisher.close).toHaveBeenCalledOnce();
   });
 
-  it("disables submission when BroadcastChannel is unavailable", () => {
-    render(<MockSuggestionController channelSupported={false} />);
+  it("reports a rejected development injection", async () => {
+    const user = userEvent.setup();
+    const createSuggestion = vi.fn().mockResolvedValue({ accepted: false });
+    render(
+      <MockSuggestionController createSuggestion={createSuggestion} />,
+    );
+
+    await user.type(screen.getByLabelText("Title"), "Duplicate idea");
+    await user.type(screen.getByLabelText("Summary"), "Already present");
+    await user.type(screen.getByLabelText("Body"), "Longer duplicate body");
+    await user.type(screen.getByLabelText("Insert text"), "Duplicate text");
+    await user.click(screen.getByRole("button", { name: "Send suggestion" }));
 
     expect(screen.getByRole("alert").textContent).toContain(
-      "does not support BroadcastChannel",
+      "rejected as a duplicate",
     );
-    expect(
-      (screen.getByRole("button", {
-        name: "Send suggestion",
-      }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+  });
+
+  it("disables repeat submission while Electron IPC is pending", async () => {
+    const user = userEvent.setup();
+    let resolveRequest!: (result: { accepted: boolean }) => void;
+    const createSuggestion = vi.fn(
+      () =>
+        new Promise<{ accepted: boolean }>((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    render(
+      <MockSuggestionController createSuggestion={createSuggestion} />,
+    );
+
+    await user.type(screen.getByLabelText("Title"), "Pending idea");
+    await user.type(screen.getByLabelText("Summary"), "Pending summary");
+    await user.type(screen.getByLabelText("Body"), "Pending body");
+    await user.type(screen.getByLabelText("Insert text"), "Pending text");
+    await user.click(screen.getByRole("button", { name: "Send suggestion" }));
+
+    const pendingButton = screen.getByRole("button", { name: "Sending…" });
+    expect((pendingButton as HTMLButtonElement).disabled).toBe(true);
+    resolveRequest({ accepted: true });
+    expect(await screen.findByRole("status")).toBeTruthy();
   });
 });

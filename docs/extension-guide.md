@@ -1,10 +1,10 @@
 # Extension guide
 
-This guide identifies the existing seams for likely next steps in the browser and desktop runtimes.
+This guide identifies the existing seams for likely next steps in the Electron runtime.
 
 ## Evolve the writing-partner transport
 
-Keep transport details behind the existing [`SuggestionFeed`](../src/suggestions/types.ts) contract. The browser development runtime uses the injected mock adapter; the Electron runtime uses the desktop adapter and Pi agent process.
+Keep transport details behind the existing [`SuggestionFeed`](../src/suggestions/types.ts) contract. The Electron adapter receives committed events from the storage and Pi processes; the development controller injects through that same persisted path.
 
 A production adapter must define:
 
@@ -35,11 +35,11 @@ Version the payload if a server will persist or process it independently.
 
 ## Extend persistence
 
-The desktop runtime persists through its storage process and SQLite database. Keep the existing separation between document data, suggestion projection, sources, agent records, and provider settings rather than replacing it with one opaque React-state blob.
+The desktop runtime persists through its storage process and SQLite database. Keep the existing separation between document data, suggestion projection, sources, agent records, and the separately validated `agent.yaml` model configuration rather than replacing it with one opaque React-state blob.
 
 ### Document data
 
-Document saves contain BlockNote's serializable document model and metadata. Accepted content is autosaved after a short debounce, and startup hydration replaces the initial browser seed. Preserve schema-version handling as the custom block set evolves.
+Document saves contain BlockNote's serializable document model and metadata. Accepted content is autosaved after a short debounce, and startup hydration replaces the initial renderer seed. Preserve schema-version handling as the custom block set evolves.
 
 Temporary `suggestionPreview` blocks are excluded from the saved accepted document. If preview recovery is added later, store it as a separate draft concept.
 
@@ -51,7 +51,7 @@ Pinned entries are user-owned frozen snapshots. Preserve that distinction if liv
 
 ### Workspace preferences
 
-Column widths remain local browser preferences. Workspace-card geometry is stored per document and restored through the same clamp path because available canvas dimensions change.
+Column widths remain renderer-local preferences. Workspace-card geometry is stored per document and restored through the same clamp path because available canvas dimensions change.
 
 Add new durable data through the storage-process RPC boundary. Hydrate owners at application startup and keep serialization out of display components.
 
@@ -108,7 +108,7 @@ Before wiring buttons individually, introduce the missing domain/state boundary:
 
 ## Extend artifact upload or source retrieval
 
-The desktop sidebar imports PDF, DOCX, Markdown, and text files through the main/storage boundary and shows persisted sources. The browser development runtime has no source backend.
+The sidebar imports PDF, DOCX, Markdown, and text files through the main/storage boundary and shows persisted sources.
 
 That owner should distinguish:
 

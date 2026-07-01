@@ -102,7 +102,7 @@
             <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
           </header>
 
-          <article class="prose"><p>This is the core interaction model: the injected feed emits events, the inbox reducer turns those events and user actions into state, and text suggestions can temporarily enter the document as editable previews.</p>
+          <article class="prose"><p>This is the core interaction model: the Electron feed emits committed events, the inbox reducer turns those events and user actions into state, and text suggestions can temporarily enter the document as editable previews.</p>
 <h2 id="domain-model">Domain model<a class="heading-anchor" href="#domain-model" aria-label="Link to Domain model">#</a></h2><p>The shared contracts are in <a href="../../src/suggestions/types.ts"><code>src/suggestions/types.ts</code></a>.</p>
 <h3 id="suggestion-kinds">Suggestion kinds<a class="heading-anchor" href="#suggestion-kinds" aria-label="Link to Suggestion kinds">#</a></h3><table>
 <thead>
@@ -198,14 +198,8 @@
 <td>Set a displayable error and its recoverability metadata.</td>
 </tr>
 </tbody></table>
-<p>The browser-only development adapter in <a href="../../src/dev/mockSuggestions/createInjectedSuggestionFeed.ts"><code>createInjectedSuggestionFeed.ts</code></a>:</p>
-<ul>
-<li>opens a <code>BroadcastChannel</code> receiver when its first listener subscribes;</li>
-<li>forwards valid <code>suggestion.added</code> events sent by the temporary <code>/mock-suggestions</code> controller;</li>
-<li>closes the channel receiver after its last listener leaves.</li>
-</ul>
-<p>The temporary controller supports all six suggestion kinds. It generates identity, dedupe, and timestamp fields; validates recursive structure-node JSON; and sends events only to already-open same-origin tabs.</p>
-<p>The packaged desktop application instead uses <a href="../../src/desktop/desktopClient.ts"><code>createDesktopSuggestionFeed</code></a>. It receives suggestion and agent-status events from the Electron main process. Suggestions are written to the desktop database before an event is forwarded to the renderer, so reload hydrates the same inbox projection rather than starting a mock session.</p>
+<p>The renderer uses <a href="../../src/desktop/desktopClient.ts"><code>createDesktopSuggestionFeed</code></a>. It receives suggestion and agent-status events from Electron main. Suggestions are written to the desktop database before an event is forwarded, so reload hydrates the same inbox projection.</p>
+<p>During Vite development, a separate Electron controller window supports all six suggestion kinds. It generates identity, dedupe, and timestamp fields, validates recursive structure-node JSON, and invokes a development-only preload bridge. Main validates the payload again and asks storage to commit it through the same suggestion path used by the Pi agent.</p>
 <h2 id="inbox-state-machine">Inbox state machine<a class="heading-anchor" href="#inbox-state-machine" aria-label="Link to Inbox state machine">#</a></h2><p><a href="../../src/suggestions/inbox.ts"><code>inboxReducer</code></a> owns:</p>
 <div class="code-block" data-language="text"><div class="code-block__bar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg><span>Copy</span></button></div><pre><code class="language-text">entries             live inbox suggestions
 pinnedEntries       frozen references in the Pins section

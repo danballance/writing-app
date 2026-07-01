@@ -2,7 +2,7 @@ import type {
   SuggestionItem,
   SuggestionKind,
 } from "../../suggestions/types";
-import { isStructureNodes } from "./mockSuggestionValidation";
+import { isStructureNodes } from "../../suggestions/validation";
 
 export type MockSuggestionDraft = {
   kind: SuggestionKind;

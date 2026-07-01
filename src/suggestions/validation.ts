@@ -1,4 +1,4 @@
-import type { StructureNode, SuggestionItem } from "../../suggestions/types";
+import type { StructureNode, SuggestionItem } from "./types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -9,9 +9,7 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isStructureNode(value: unknown): value is StructureNode {
-  if (!isRecord(value)) {
-    return false;
-  }
+  if (!isRecord(value)) return false;
 
   return (
     isNonEmptyString(value.id) &&
@@ -27,9 +25,7 @@ export function isStructureNodes(value: unknown): value is StructureNode[] {
 }
 
 export function isSuggestionItem(value: unknown): value is SuggestionItem {
-  if (!isRecord(value)) {
-    return false;
-  }
+  if (!isRecord(value)) return false;
 
   const hasCommonFields =
     isNonEmptyString(value.id) &&
@@ -42,9 +38,7 @@ export function isSuggestionItem(value: unknown): value is SuggestionItem {
     typeof value.createdAt === "number" &&
     Number.isFinite(value.createdAt);
 
-  if (!hasCommonFields) {
-    return false;
-  }
+  if (!hasCommonFields) return false;
 
   if (
     value.kind === "snippet" ||

@@ -2,11 +2,12 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import type {
   DesktopBridge,
+  DesktopDevelopmentBridge,
   DesktopEvent,
   PersistedSuggestionState,
-  ProviderSettings,
   SourceSnapshot,
 } from "../src/shared/desktop.js";
+import type { SuggestionItem } from "../src/suggestions/types.js";
 
 const bridge: DesktopBridge = {
   hydrate: () => ipcRenderer.invoke("scribe:hydrate"),
@@ -15,11 +16,6 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke("scribe:suggestions.save", state),
   importSource: (): Promise<SourceSnapshot | undefined> =>
     ipcRenderer.invoke("scribe:source.import"),
-  setProvider: (input: ProviderSettings & { apiKey: string }) =>
-    ipcRenderer.invoke("scribe:provider.set", input),
-  setAgentPaused: (paused: boolean) =>
-    ipcRenderer.invoke("scribe:agent.pause", paused),
-  considerNow: () => ipcRenderer.invoke("scribe:agent.consider-now"),
   subscribe(listener: (event: DesktopEvent) => void) {
     const handler = (_event: Electron.IpcRendererEvent, payload: DesktopEvent) =>
       listener(payload);
@@ -29,3 +25,11 @@ const bridge: DesktopBridge = {
 };
 
 contextBridge.exposeInMainWorld("scribe", bridge);
+
+if (process.argv.includes("--scribe-development")) {
+  const developmentBridge: DesktopDevelopmentBridge = {
+    createSuggestion: (item: SuggestionItem) =>
+      ipcRenderer.invoke("scribe:development.suggestion.create", item),
+  };
+  contextBridge.exposeInMainWorld("scribeDevelopment", developmentBridge);
+}

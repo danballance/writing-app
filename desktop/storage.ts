@@ -6,17 +6,19 @@ import { tmpdir } from "node:os";
 
 import mammoth from "mammoth";
 
+import type { LegacyProviderSettings } from "./agent-config.js";
+
 import type {
   DesktopEvent,
   DocumentSnapshot,
   ObservationSeed,
   PersistedSuggestionState,
   ProjectContentItem,
-  ProviderSettings,
   SourceSnapshot,
   WorkspaceSnapshot,
 } from "../src/shared/desktop.js";
 import type { SuggestionEvent, SuggestionItem } from "../src/suggestions/types.js";
+import { isSuggestionItem } from "../src/suggestions/validation.js";
 
 type RpcRequest = { kind: "rpc"; id: string; method: string; params?: unknown };
 type RpcResult =
@@ -162,9 +164,6 @@ function bootstrap() {
       (id, provider, model, base_url, enabled, updated_at)
       VALUES ('global', 'anthropic', 'claude-sonnet-4-6', '', 0, ?)`,
   ).run(now);
-  db.prepare(
-    "INSERT OR IGNORE INTO app_meta (key, value) VALUES ('agent_paused', '0')",
-  ).run();
 }
 
 bootstrap();
@@ -173,20 +172,7 @@ function json<T>(value: string): T {
   return JSON.parse(value) as T;
 }
 
-function scalar(key: string, fallback = "0") {
-  const row = db.prepare("SELECT value FROM app_meta WHERE key = ?").get(key) as
-    | { value: string }
-    | undefined;
-  return row?.value ?? fallback;
-}
-
-function setScalar(key: string, value: string) {
-  db.prepare(
-    "INSERT INTO app_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-  ).run(key, value);
-}
-
-function getProvider(): ProviderSettings {
+function getLegacyProvider(): LegacyProviderSettings {
   const row = db.prepare(
     "SELECT provider, model, base_url, enabled FROM provider_settings WHERE id = 'global'",
   ).get() as {
@@ -311,11 +297,9 @@ function hydrate(): WorkspaceSnapshot {
     document: getDocument(),
     sources: listSources(),
     suggestions: getSuggestionState(),
-    provider: getProvider(),
     agent: {
-      paused: scalar("agent_paused") === "1",
       running: false,
-      configured: getProvider().enabled,
+      configured: false,
     },
     sequence: sequenceRow.sequence,
   };
@@ -426,28 +410,6 @@ function saveSuggestionState(params: unknown) {
   putSuggestionState(state);
 }
 
-function setProvider(params: unknown) {
-  const input = params as ProviderSettings;
-  db.prepare(
-    `UPDATE provider_settings
-     SET provider = ?, model = ?, base_url = ?, enabled = ?, updated_at = ?
-     WHERE id = 'global'`,
-  ).run(
-    input.provider.trim(),
-    input.model.trim(),
-    input.baseUrl.trim(),
-    input.enabled ? 1 : 0,
-    Date.now(),
-  );
-  return getProvider();
-}
-
-function setPaused(params: unknown) {
-  const paused = Boolean((params as { paused: boolean }).paused);
-  setScalar("agent_paused", paused ? "1" : "0");
-  return paused;
-}
-
 function getObservationSeed(): ObservationSeed {
   const project = db.prepare(
     "SELECT id, name, revision FROM projects WHERE id = ?",
@@ -464,8 +426,6 @@ function getObservationSeed(): ObservationSeed {
     documentTitle: document.title,
     documentRevision: document.revision,
     memorySummary: memory?.summary ?? "",
-    provider: getProvider(),
-    paused: scalar("agent_paused") === "1",
   };
 }
 
@@ -590,6 +550,17 @@ function createSuggestion(params: unknown) {
   });
 }
 
+function createDevelopmentSuggestion(params: unknown) {
+  const item = (params as { item?: unknown }).item;
+  if (!isSuggestionItem(item)) {
+    throw new Error("Invalid development suggestion");
+  }
+  return createSuggestion({
+    item,
+    expectedDocumentRevision: getDocument().revision,
+  });
+}
+
 function updateSuggestion(params: unknown) {
   const input = params as { item: SuggestionItem; expectedDocumentRevision: number };
   if (getDocument().revision !== input.expectedDocumentRevision) {
@@ -686,14 +657,14 @@ export async function handleStorageRequest(method: string, params?: unknown) {
     case "document.save": return saveDocument(params);
     case "suggestions.save": return saveSuggestionState(params);
     case "source.import": return importSource(params);
-    case "provider.set": return setProvider(params);
-    case "agent.pause": return setPaused(params);
+    case "provider.get": return getLegacyProvider();
     case "agent.seed": return getObservationSeed();
     case "agent.content.list": return listProjectContent();
     case "agent.content.read": return readProjectContent(params);
     case "agent.content.search": return searchProjectContent(params);
     case "agent.suggestions.list": return listSuggestions();
     case "agent.suggestion.create": return createSuggestion(params);
+    case "development.suggestion.create": return createDevelopmentSuggestion(params);
     case "agent.suggestion.update": return updateSuggestion(params);
     case "agent.suggestion.retract": return retractSuggestion(params);
     case "agent.run.start": return startRun(params);

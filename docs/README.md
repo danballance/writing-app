@@ -4,17 +4,17 @@ This directory describes the application as it works now. It is intended to get 
 
 ## What this application is
 
-ScribeAI is a React writing workspace with both browser-development and Electron desktop runtimes. The current implementation combines:
+ScribeAI is an Electron writing workspace with a React renderer. The current implementation combines:
 
 - a BlockNote rich-text editor;
-- a manually injected browser feed and a persistent desktop writing-partner feed;
+- persistent live and development-injected writing-partner feeds;
 - an inbox for reading, dismissing, pinning, and previewing suggestions;
 - desktop workspace cards for keeping references over the editor;
 - responsive navigation and writing-partner panels;
 - SQLite document, source, suggestion, transcript, and agent-memory persistence;
 - a background Pi agent with user-configured inference providers.
 
-The browser development runtime remains in-memory and uses the `/mock-suggestions` controller. The Electron runtime owns SQLite and Pi in utility processes, imports text, Markdown, JSON, PDF, and DOCX sources, and restores the workspace after restart. Routing and most document-management controls remain presentation-only.
+Electron owns SQLite and Pi in utility processes, imports text, Markdown, JSON, PDF, and DOCX sources, and restores the workspace after restart. Development uses the same runtime with Vite renderer HMR and a dedicated mock-suggestion window. Routing and most document-management controls remain presentation-only.
 
 ## Fastest route into the codebase
 
@@ -30,8 +30,8 @@ The browser development runtime remains in-memory and uses the `/mock-suggestion
 
 | Area | Current behavior |
 | --- | --- |
-| Editor | Browser development starts with seeded content; Electron hydrates and autosaves the current BlockNote document. |
-| Writing partner | Browser development uses `/mock-suggestions`; Electron receives committed suggestions from the Pi agent. |
+| Editor | Electron hydrates and autosaves the current BlockNote document. |
+| Writing partner | Electron receives committed suggestions from the Pi agent or its development-only mock controller. |
 | Text suggestions | Snippets, facts, and terms can become an editable document preview, then be accepted or cancelled. |
 | Structural suggestions | Outlines and layouts render nested cards; mind maps render through Mermaid. They are references, not insertable previews. |
 | Pins | A suggestion can be frozen into the Pins section. On desktop it can then be placed, moved, resized, stacked, and returned. |
@@ -48,10 +48,10 @@ The browser development runtime remains in-memory and uses the `/mock-suggestion
 ├── desktop/                      Electron main, preload, storage, Pi, and build entries
 ├── src/
 │   ├── App.tsx                   Composition root and cross-feature orchestration
-│   ├── main.tsx                  React browser entry point
+│   ├── main.tsx                  React renderer entry point
 │   ├── index.css                 Tailwind theme, layout rules, and editor overrides
 │   ├── components/               UI components and component tests
-│   ├── dev/mockSuggestions/      Temporary controller, validation, channel, and injected feed
+│   ├── dev/mockSuggestions/      Electron-only development controller and payload builder
 │   ├── desktop/                  Renderer-side desktop feed adapter
 │   ├── editor/                   BlockNote schema and preview events
 │   ├── suggestions/              Suggestion contracts, inbox state, and workspace layout
@@ -74,7 +74,7 @@ The browser development runtime remains in-memory and uses the `/mock-suggestion
 
 ## Important implementation constraints
 
-- [`App.tsx`](../src/App.tsx) is the renderer composition root. It selects the browser or Electron adapter and connects hydration, autosave, feed, previews, panel state, and workspace pins.
+- [`App.tsx`](../src/App.tsx) is the renderer composition root. It connects the required Electron bridge, hydration, autosave, feed, previews, panel state, and workspace pins.
 - [`inboxReducer`](../src/suggestions/inbox.ts) is the source of truth for suggestion lifecycle rules. UI components dispatch intent; they should not recreate those rules locally.
-- [`SuggestionFeed`](../src/suggestions/types.ts) is the event-stream boundary. Browser and Electron adapters are separate producers.
+- [`SuggestionFeed`](../src/suggestions/types.ts) is the event-stream boundary. The Electron adapter maps committed desktop events into renderer events.
 - The app assumes a browser DOM. `window`, `document`, `localStorage`, media queries, `ResizeObserver`, and pointer capture are used directly.

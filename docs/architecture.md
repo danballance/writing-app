@@ -2,7 +2,7 @@
 
 ## System boundary
 
-The React renderer supports two composition paths. Normal Vite development is browser-only and retains the temporary `/mock-suggestions` route. The packaged Electron path adds a preload bridge, main-process orchestration, a SQLite utility process, and a Pi utility process. There is still no routing library.
+The React renderer has one application composition: Electron supplies a required preload bridge, main-process orchestration, a SQLite utility process, and a Pi utility process. Vite serves that renderer inside Electron during development and builds it for `file://` loading in production. There is still no routing library.
 
 ```mermaid
 flowchart LR
@@ -18,8 +18,8 @@ flowchart LR
     Main[Electron main]
     Database[SQLite storage process]
     Agent[Pi agent process]
-    Controller[Temporary suggestion controller]
-    Channel[BroadcastChannel]
+    Controller[Development controller window]
+    DevBridge[Development-only preload bridge]
 
     User --> Shell
     Shell --> Editor
@@ -34,29 +34,29 @@ flowchart LR
     Main <--> Database
     Main <--> Agent
     Agent <--> Database
-    Controller --> Channel
-    Channel --> Feed
+    Controller --> DevBridge
+    DevBridge --> Main
 ```
 
-The `SuggestionFeed` remains transport-neutral. The browser adapter uses `BroadcastChannel`; the Electron adapter maps committed desktop events. Desktop queries and commands use the typed `DesktopBridge` contract.
+The `SuggestionFeed` remains transport-neutral, while its only application adapter maps committed Electron events. Desktop queries and commands use the typed `DesktopBridge` contract. Development injection is a separately gated bridge and enters the same persisted storage/event path.
 
 ## Composition root
 
 [`App.tsx`](../src/App.tsx) creates and connects long-lived objects:
 
 1. `useCreateBlockNote` creates the editor from `writingSchema` and seeded content.
-2. `createInjectedSuggestionFeed` creates the channel-backed feed and is memoized for the component lifetime.
+2. `createDesktopSuggestionFeed` creates the Electron event adapter and is memoized for the component lifetime.
 3. `useSuggestionInbox` subscribes to the feed and owns the suggestion lifecycle reducer.
 4. `App` creates editor preview blocks, translates preview resolution events back into inbox actions, and controls responsive panels.
 
-Keeping feed creation stable is important. Recreating it during a render would reopen the manual channel and resubscribe the inbox.
+Keeping feed creation stable is important. Recreating it during a render would resubscribe the inbox to desktop events.
 
 ## State ownership
 
 | State | Owner | Lifetime / persistence |
 | --- | --- | --- |
 | Editor blocks and selection | BlockNote editor created in `App` | Selection is in-memory; accepted blocks autosave in Electron |
-| Feed subscribers and injected-event channel | `createInjectedSuggestionFeed` closure | While at least one feed subscriber exists |
+| Feed subscribers | `createDesktopSuggestionFeed` closure | Renderer lifetime |
 | Inbox, pins, preview id, agent status, errors | `useSuggestionInbox` / `inboxReducer` | Visible suggestion projection persists in Electron; preview/status stay ephemeral |
 | Workspace pin geometry and z-order | Inbox reducer | Persists in Electron |
 | Desktop panel open/closed state | `App` React state | Current page only |
@@ -64,7 +64,7 @@ Keeping feed creation stable is important. Recreating it during a render would r
 | Last editor block with a text cursor | `App` React state | Current page only |
 | Desktop column widths | `App` React state | `localStorage` when available |
 | Documents, sources, transcripts, memory | SQLite storage process | Electron application data |
-| Provider settings | SQLite storage process / Electron main | Configuration persists; API key is launch-memory only |
+| Agent model configuration | Electron main | `agent.yaml` in Electron application data; credentials resolve from the environment |
 | Draft title, tab, source, and navigation data | Component constants | Static |
 
 There is intentionally one owner for each lifecycle. Components such as `SuggestionDock`, `WorkspacePins`, and `DocumentHeader` receive values and callbacks; they do not own duplicate application state.
@@ -81,12 +81,13 @@ The editor layer knows suggestion IDs, but it does not import or mutate inbox st
 ### `src/suggestions`
 
 - [`types.ts`](../src/suggestions/types.ts) defines suggestion data and the feed interface.
+- [`validation.ts`](../src/suggestions/validation.ts) validates suggestion payloads at runtime before development IPC reaches storage.
 - [`inbox.ts`](../src/suggestions/inbox.ts) implements all suggestion, pin, preview, and workspace transitions.
 - [`workspacePinLayout.ts`](../src/suggestions/workspacePinLayout.ts) supplies type-specific initial card sizes.
 
 ### `src/dev/mockSuggestions`
 
-This temporary directory owns the controller view, payload builder and validation, `BroadcastChannel` transport, and `createInjectedSuggestionFeed`. It is the only mock event ingress and can be removed as one unit when a real feed is introduced.
+This temporary directory owns the Electron-only controller view and payload builder. Main and preload expose its injection bridge only during Vite development; storage persists accepted mock suggestions exactly like agent-created suggestions.
 
 This layer is React-independent except for the `useSuggestionInbox` hook at the bottom of `inbox.ts`. The reducer itself is a pure function and is the most important unit-test boundary.
 
@@ -114,24 +115,25 @@ This layer is React-independent except for the `useSuggestionInbox` hook at the 
 
 Components rely on their props for application actions. When adding behavior, prefer moving data and transitions into the relevant owner rather than making a display component stateful.
 
-## Browser bootstrap sequence
+## Renderer bootstrap sequence
 
-The browser-development path remains the lightweight mock composition. The Electron startup, hydration, and utility-process sequence is documented separately in [Desktop persistence and Pi runtime](desktop-runtime.md#startup-and-renderer-loading).
+The renderer refuses to construct `App` without the Electron bridge. The complete process startup is documented separately in [Desktop persistence and Pi runtime](desktop-runtime.md#startup-and-renderer-loading).
 
 ```mermaid
 sequenceDiagram
     participant Main as main.tsx
     participant App
     participant Editor as BlockNote
-    participant Controller as Mock controller tab
+    participant Bridge as Electron bridge
     participant Feed as SuggestionFeed
     participant Inbox as useSuggestionInbox
 
+    Main->>Bridge: require preload bridge
     Main->>App: render inside StrictMode
     App->>Editor: create schema-backed editor
-    App->>Feed: create injected-event feed
+    App->>Feed: create desktop event feed
     Inbox->>Feed: subscribe
-    Controller->>Feed: broadcasts suggestion.added
+    Bridge-->>Feed: committed suggestion event
     Feed-->>Inbox: suggestion.added
 ```
 

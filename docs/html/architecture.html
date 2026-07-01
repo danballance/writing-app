@@ -102,7 +102,7 @@
             <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
           </header>
 
-          <article class="prose"><h2 id="system-boundary">System boundary<a class="heading-anchor" href="#system-boundary" aria-label="Link to System boundary">#</a></h2><p>The React renderer supports two composition paths. Normal Vite development is browser-only and retains the temporary <code>/mock-suggestions</code> route. The packaged Electron path adds a preload bridge, main-process orchestration, a SQLite utility process, and a Pi utility process. There is still no routing library.</p>
+          <article class="prose"><h2 id="system-boundary">System boundary<a class="heading-anchor" href="#system-boundary" aria-label="Link to System boundary">#</a></h2><p>The React renderer has one application composition: Electron supplies a required preload bridge, main-process orchestration, a SQLite utility process, and a Pi utility process. Vite serves that renderer inside Electron during development and builds it for <code>file://</code> loading in production. There is still no routing library.</p>
 <figure class="diagram diagram--architecture" aria-labelledby="architecture-map-title">
     <figcaption id="architecture-map-title">
       <span class="diagram__eyebrow">System map</span>
@@ -137,8 +137,8 @@
     Main[Electron main]
     Database[SQLite storage process]
     Agent[Pi agent process]
-    Controller[Temporary suggestion controller]
-    Channel[BroadcastChannel]
+    Controller[Development controller window]
+    DevBridge[Development-only preload bridge]
 
     User --&gt; Shell
     Shell --&gt; Editor
@@ -153,17 +153,17 @@
     Main &lt;--&gt; Database
     Main &lt;--&gt; Agent
     Agent &lt;--&gt; Database
-    Controller --&gt; Channel
-    Channel --&gt; Feed</code></pre></details>
-  </figure><p>The <code>SuggestionFeed</code> remains transport-neutral. The browser adapter uses <code>BroadcastChannel</code>; the Electron adapter maps committed desktop events. Desktop queries and commands use the typed <code>DesktopBridge</code> contract.</p>
+    Controller --&gt; DevBridge
+    DevBridge --&gt; Main</code></pre></details>
+  </figure><p>The <code>SuggestionFeed</code> remains transport-neutral, while its only application adapter maps committed Electron events. Desktop queries and commands use the typed <code>DesktopBridge</code> contract. Development injection is a separately gated bridge and enters the same persisted storage/event path.</p>
 <h2 id="composition-root">Composition root<a class="heading-anchor" href="#composition-root" aria-label="Link to Composition root">#</a></h2><p><a href="../../src/App.tsx"><code>App.tsx</code></a> creates and connects long-lived objects:</p>
 <ol>
 <li><code>useCreateBlockNote</code> creates the editor from <code>writingSchema</code> and seeded content.</li>
-<li><code>createInjectedSuggestionFeed</code> creates the channel-backed feed and is memoized for the component lifetime.</li>
+<li><code>createDesktopSuggestionFeed</code> creates the Electron event adapter and is memoized for the component lifetime.</li>
 <li><code>useSuggestionInbox</code> subscribes to the feed and owns the suggestion lifecycle reducer.</li>
 <li><code>App</code> creates editor preview blocks, translates preview resolution events back into inbox actions, and controls responsive panels.</li>
 </ol>
-<p>Keeping feed creation stable is important. Recreating it during a render would reopen the manual channel and resubscribe the inbox.</p>
+<p>Keeping feed creation stable is important. Recreating it during a render would resubscribe the inbox to desktop events.</p>
 <h2 id="state-ownership">State ownership<a class="heading-anchor" href="#state-ownership" aria-label="Link to State ownership">#</a></h2><table>
 <thead>
 <tr>
@@ -178,9 +178,9 @@
 <td>Selection is in-memory; accepted blocks autosave in Electron</td>
 </tr>
 <tr>
-<td>Feed subscribers and injected-event channel</td>
-<td><code>createInjectedSuggestionFeed</code> closure</td>
-<td>While at least one feed subscriber exists</td>
+<td>Feed subscribers</td>
+<td><code>createDesktopSuggestionFeed</code> closure</td>
+<td>Renderer lifetime</td>
 </tr>
 <tr>
 <td>Inbox, pins, preview id, agent status, errors</td>
@@ -218,9 +218,9 @@
 <td>Electron application data</td>
 </tr>
 <tr>
-<td>Provider settings</td>
-<td>SQLite storage process / Electron main</td>
-<td>Configuration persists; API key is launch-memory only</td>
+<td>Agent model configuration</td>
+<td>Electron main</td>
+<td><code>agent.yaml</code> in Electron application data; credentials resolve from the environment</td>
 </tr>
 <tr>
 <td>Draft title, tab, source, and navigation data</td>
@@ -236,10 +236,11 @@
 <p>The editor layer knows suggestion IDs, but it does not import or mutate inbox state.</p>
 <h3 id="src-suggestions"><code>src/suggestions</code><a class="heading-anchor" href="#src-suggestions" aria-label="Link to src/suggestions">#</a></h3><ul>
 <li><a href="../../src/suggestions/types.ts"><code>types.ts</code></a> defines suggestion data and the feed interface.</li>
+<li><a href="../../src/suggestions/validation.ts"><code>validation.ts</code></a> validates suggestion payloads at runtime before development IPC reaches storage.</li>
 <li><a href="../../src/suggestions/inbox.ts"><code>inbox.ts</code></a> implements all suggestion, pin, preview, and workspace transitions.</li>
 <li><a href="../../src/suggestions/workspacePinLayout.ts"><code>workspacePinLayout.ts</code></a> supplies type-specific initial card sizes.</li>
 </ul>
-<h3 id="src-dev-mocksuggestions"><code>src/dev/mockSuggestions</code><a class="heading-anchor" href="#src-dev-mocksuggestions" aria-label="Link to src/dev/mockSuggestions">#</a></h3><p>This temporary directory owns the controller view, payload builder and validation, <code>BroadcastChannel</code> transport, and <code>createInjectedSuggestionFeed</code>. It is the only mock event ingress and can be removed as one unit when a real feed is introduced.</p>
+<h3 id="src-dev-mocksuggestions"><code>src/dev/mockSuggestions</code><a class="heading-anchor" href="#src-dev-mocksuggestions" aria-label="Link to src/dev/mockSuggestions">#</a></h3><p>This temporary directory owns the Electron-only controller view and payload builder. Main and preload expose its injection bridge only during Vite development; storage persists accepted mock suggestions exactly like agent-created suggestions.</p>
 <p>This layer is React-independent except for the <code>useSuggestionInbox</code> hook at the bottom of <code>inbox.ts</code>. The reducer itself is a pure function and is the most important unit-test boundary.</p>
 <h3 id="desktop-and-src-desktop"><code>desktop</code> and <code>src/desktop</code><a class="heading-anchor" href="#desktop-and-src-desktop" aria-label="Link to desktop and src/desktop">#</a></h3><ul>
 <li><code>desktop/main.ts</code> owns Electron lifecycle, renderer IPC, utility processes, and the 10-second scheduler.</li>
@@ -262,7 +263,7 @@
 <li><a href="../../src/components/Sidebar.tsx"><code>Sidebar.tsx</code></a> renders the static project navigation shell plus the persisted Electron source list and upload callback.</li>
 </ul>
 <p>Components rely on their props for application actions. When adding behavior, prefer moving data and transitions into the relevant owner rather than making a display component stateful.</p>
-<h2 id="browser-bootstrap-sequence">Browser bootstrap sequence<a class="heading-anchor" href="#browser-bootstrap-sequence" aria-label="Link to Browser bootstrap sequence">#</a></h2><p>The browser-development path remains the lightweight mock composition. The Electron startup, hydration, and utility-process sequence is documented separately in <a href="desktop-runtime.html#startup-and-renderer-loading">Desktop persistence and Pi runtime</a>.</p>
+<h2 id="renderer-bootstrap-sequence">Renderer bootstrap sequence<a class="heading-anchor" href="#renderer-bootstrap-sequence" aria-label="Link to Renderer bootstrap sequence">#</a></h2><p>The renderer refuses to construct <code>App</code> without the Electron bridge. The complete process startup is documented separately in <a href="desktop-runtime.html#startup-and-renderer-loading">Desktop persistence and Pi runtime</a>.</p>
 <figure class="diagram diagram--timeline" aria-labelledby="bootstrap-timeline-title">
     <figcaption id="bootstrap-timeline-title"><span class="diagram__eyebrow">Runtime sequence</span><strong>Application bootstrap</strong></figcaption>
     <ol class="timeline-steps">
@@ -272,15 +273,16 @@
     participant Main as main.tsx
     participant App
     participant Editor as BlockNote
-    participant Controller as Mock controller tab
+    participant Bridge as Electron bridge
     participant Feed as SuggestionFeed
     participant Inbox as useSuggestionInbox
 
+    Main-&gt;&gt;Bridge: require preload bridge
     Main-&gt;&gt;App: render inside StrictMode
     App-&gt;&gt;Editor: create schema-backed editor
-    App-&gt;&gt;Feed: create injected-event feed
+    App-&gt;&gt;Feed: create desktop event feed
     Inbox-&gt;&gt;Feed: subscribe
-    Controller-&gt;&gt;Feed: broadcasts suggestion.added
+    Bridge--&gt;&gt;Feed: committed suggestion event
     Feed--&gt;&gt;Inbox: suggestion.added</code></pre></details>
   </figure><h2 id="data-direction-and-dependency-rules">Data direction and dependency rules<a class="heading-anchor" href="#data-direction-and-dependency-rules" aria-label="Link to Data direction and dependency rules">#</a></h2><p>The intended dependency direction is:</p>
 <div class="code-block" data-language="text"><div class="code-block__bar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg><span>Copy</span></button></div><pre><code class="language-text">types/contracts
@@ -336,7 +338,7 @@ components  ← props/callbacks → App composition root</code></pre></div><p>Pr
         <aside class="page-toc" aria-label="On this page">
           <div class="page-toc__inner">
             <h2>On this page</h2>
-            <nav><a class="toc-link toc-link--2" href="#system-boundary">System boundary</a><a class="toc-link toc-link--2" href="#composition-root">Composition root</a><a class="toc-link toc-link--2" href="#state-ownership">State ownership</a><a class="toc-link toc-link--2" href="#module-boundaries">Module boundaries</a><a class="toc-link toc-link--3" href="#src-editor">src/editor</a><a class="toc-link toc-link--3" href="#src-suggestions">src/suggestions</a><a class="toc-link toc-link--3" href="#src-dev-mocksuggestions">src/dev/mockSuggestions</a><a class="toc-link toc-link--3" href="#desktop-and-src-desktop">desktop and src/desktop</a><a class="toc-link toc-link--3" href="#src-components">src/components</a><a class="toc-link toc-link--2" href="#browser-bootstrap-sequence">Browser bootstrap sequence</a><a class="toc-link toc-link--2" href="#data-direction-and-dependency-rules">Data direction and dependency rules</a><a class="toc-link toc-link--2" href="#styling-architecture">Styling architecture</a><a class="toc-link toc-link--2" href="#build-and-runtime-assumptions">Build and runtime assumptions</a><a class="toc-link toc-link--2" href="#architectural-invariants">Architectural invariants</a></nav>
+            <nav><a class="toc-link toc-link--2" href="#system-boundary">System boundary</a><a class="toc-link toc-link--2" href="#composition-root">Composition root</a><a class="toc-link toc-link--2" href="#state-ownership">State ownership</a><a class="toc-link toc-link--2" href="#module-boundaries">Module boundaries</a><a class="toc-link toc-link--3" href="#src-editor">src/editor</a><a class="toc-link toc-link--3" href="#src-suggestions">src/suggestions</a><a class="toc-link toc-link--3" href="#src-dev-mocksuggestions">src/dev/mockSuggestions</a><a class="toc-link toc-link--3" href="#desktop-and-src-desktop">desktop and src/desktop</a><a class="toc-link toc-link--3" href="#src-components">src/components</a><a class="toc-link toc-link--2" href="#renderer-bootstrap-sequence">Renderer bootstrap sequence</a><a class="toc-link toc-link--2" href="#data-direction-and-dependency-rules">Data direction and dependency rules</a><a class="toc-link toc-link--2" href="#styling-architecture">Styling architecture</a><a class="toc-link toc-link--2" href="#build-and-runtime-assumptions">Build and runtime assumptions</a><a class="toc-link toc-link--2" href="#architectural-invariants">Architectural invariants</a></nav>
             <a class="toc-source" href="../architecture.md"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h5v5M10 14 20 4"></path><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"></path></svg> View source</a>
           </div>
         </aside>

@@ -1,18 +1,15 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 
-import type { SuggestionKind } from "../../suggestions/types";
-import {
-  createMockSuggestionPublisher,
-  type MockSuggestionPublisher,
-} from "./mockSuggestionChannel";
+import type { SuggestionItem, SuggestionKind } from "../../suggestions/types";
 import {
   buildMockSuggestion,
   type MockSuggestionDraft,
 } from "./mockSuggestionDraft";
 
 type MockSuggestionControllerProps = {
-  createPublisher?: () => MockSuggestionPublisher | null;
-  channelSupported?: boolean;
+  createSuggestion: (
+    item: SuggestionItem,
+  ) => Promise<{ accepted: boolean }>;
 };
 
 const kindOptions: Array<{ value: SuggestionKind; label: string }> = [
@@ -44,30 +41,16 @@ function readFormString(formData: FormData, name: string) {
 }
 
 export function MockSuggestionController({
-  createPublisher = createMockSuggestionPublisher,
-  channelSupported = typeof BroadcastChannel !== "undefined",
+  createSuggestion,
 }: MockSuggestionControllerProps) {
   const [kind, setKind] = useState<SuggestionKind>("snippet");
   const [message, setMessage] = useState<
     { type: "success" | "error"; text: string } | undefined
   >();
-  const publisherRef = useRef<MockSuggestionPublisher | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  useEffect(() => {
-    if (!channelSupported) {
-      return undefined;
-    }
-    const publisher = createPublisher();
-    publisherRef.current = publisher;
-
-    return () => {
-      publisher?.close();
-      publisherRef.current = null;
-    };
-  }, [channelSupported, createPublisher]);
-
-  const submitSuggestion = (event: FormEvent<HTMLFormElement>) => {
+  const submitSuggestion = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const draft: MockSuggestionDraft = {
@@ -85,18 +68,19 @@ export function MockSuggestionController({
       ),
     };
 
+    setSubmitting(true);
+    setMessage(undefined);
     try {
-      const publisher = publisherRef.current;
-      if (!publisher) {
-        throw new Error("The live mock channel is unavailable.");
-      }
       const suggestion = buildMockSuggestion(draft);
-      publisher.publish(suggestion);
+      const result = await createSuggestion(suggestion);
+      if (!result.accepted) {
+        throw new Error("The suggestion was rejected as a duplicate.");
+      }
       formRef.current?.reset();
       setKind("snippet");
       setMessage({
         type: "success",
-        text: `Sent “${suggestion.title}” to the live mock channel.`,
+        text: `Added “${suggestion.title}” to the persisted suggestion inbox.`,
       });
     } catch (error) {
       setMessage({
@@ -106,6 +90,8 @@ export function MockSuggestionController({
             ? error.message
             : "The suggestion could not be sent.",
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -123,17 +109,9 @@ export function MockSuggestionController({
             Mock suggestion controller
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#686577]">
-            Keep the writing app open in another tab on this origin. Suggestions
-            are delivered live and are not saved or replayed.
+            Suggestions are written through the Electron development bridge and
+            persist in the same inbox as agent suggestions.
           </p>
-          <a
-            href="/"
-            target="_blank"
-            rel="noreferrer"
-            className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-brand-300 bg-white px-3.5 text-sm font-bold text-brand-700 hover:bg-brand-50 focus:outline focus:outline-3 focus:outline-brand-200"
-          >
-            Open writing workspace
-          </a>
         </header>
 
         <form
@@ -245,15 +223,7 @@ export function MockSuggestionController({
             </>
           ) : null}
 
-          {!channelSupported ? (
-            <p
-              role="alert"
-              className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900"
-            >
-              This browser does not support BroadcastChannel, so it cannot
-              inject mock suggestions.
-            </p>
-          ) : message ? (
+          {message ? (
             <p
               role={message.type === "error" ? "alert" : "status"}
               className={`rounded-lg px-4 py-3 text-sm font-medium ${
@@ -269,10 +239,10 @@ export function MockSuggestionController({
           <div className="flex justify-end border-t border-[#e8e5f2] pt-5">
             <button
               type="submit"
-              disabled={!channelSupported}
+              disabled={submitting}
               className="min-h-11 rounded-lg bg-brand-600 px-5 text-sm font-bold text-white shadow-md shadow-brand-600/15 hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-[#aaa6bd]"
             >
-              Send suggestion
+              {submitting ? "Sending…" : "Send suggestion"}
             </button>
           </div>
         </form>

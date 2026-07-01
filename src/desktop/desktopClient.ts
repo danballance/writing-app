@@ -1,8 +1,12 @@
 import type { DesktopBridge, DesktopEvent } from "../shared/desktop";
 import type { SuggestionEvent, SuggestionFeed } from "../suggestions/types";
 
-export function getDesktopBridge(): DesktopBridge | undefined {
-  return window.scribe;
+export function getDesktopBridge(): DesktopBridge {
+  const bridge = window.scribe;
+  if (!bridge) {
+    throw new Error("ScribeAI requires the Electron desktop runtime.");
+  }
+  return bridge;
 }
 
 export function createDesktopSuggestionFeed(

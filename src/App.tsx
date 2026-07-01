@@ -9,24 +9,20 @@ import {
 } from "react";
 
 import { ColumnResizeHandle } from "./components/ColumnResizeHandle";
-import { AgentControls } from "./components/AgentControls";
 import { EditorWorkspace } from "./components/EditorWorkspace";
 import { ResponsiveDrawer } from "./components/ResponsiveDrawer";
 import { Sidebar } from "./components/Sidebar";
 import { SuggestionDock } from "./components/SuggestionDock";
 import {
   createDesktopSuggestionFeed,
-  getDesktopBridge,
 } from "./desktop/desktopClient";
-import { createInjectedSuggestionFeed } from "./dev/mockSuggestions/createInjectedSuggestionFeed";
 import { subscribeToPreviewResolutions } from "./editor/previewEvents";
 import { writingSchema, type WritingPartialBlock } from "./editor/schema";
 import { useSuggestionInbox } from "./suggestions/inbox";
 import { getInitialWorkspacePinSize } from "./suggestions/workspacePinLayout";
 import type {
-  AgentRuntime,
+  DesktopBridge,
   PersistedSuggestionState,
-  ProviderSettings,
   SourceSnapshot,
 } from "./shared/desktop";
 import type { SuggestionItem, TextSuggestion } from "./suggestions/types";
@@ -46,18 +42,6 @@ const MAX_CONTEXT_WIDTH = 720;
 const MIN_EDITOR_WIDTH = 520;
 const NAVIGATION_WIDTH_KEY = "scribe-navigation-column-width";
 const CONTEXT_WIDTH_KEY = "scribe-context-column-width";
-const DEFAULT_PROVIDER: ProviderSettings = {
-  provider: "anthropic",
-  model: "claude-sonnet-4-6",
-  baseUrl: "",
-  enabled: false,
-};
-const DEFAULT_AGENT_RUNTIME: AgentRuntime = {
-  paused: false,
-  running: false,
-  configured: false,
-};
-
 function readSavedWidth(key: string, min: number, max: number) {
   try {
     const width = Number(window.localStorage.getItem(key));
@@ -87,8 +71,11 @@ function isTextSuggestion(item: SuggestionItem): item is TextSuggestion {
   );
 }
 
-export default function App() {
-  const desktop = useMemo(() => getDesktopBridge(), []);
+type AppProps = {
+  desktop: DesktopBridge;
+};
+
+export default function App({ desktop }: AppProps) {
   const workspaceRef = useRef<HTMLElement>(null);
   const navigationColumnRef = useRef<HTMLDivElement>(null);
   const contextColumnRef = useRef<HTMLDivElement>(null);
@@ -110,32 +97,24 @@ export default function App() {
       readSavedWidth(CONTEXT_WIDTH_KEY, MIN_CONTEXT_WIDTH, MAX_CONTEXT_WIDTH),
   );
   const editor = useCreateBlockNote({ schema: writingSchema, initialContent });
-  const feed = useMemo(
-    () =>
-      desktop
-        ? createDesktopSuggestionFeed(desktop)
-        : createInjectedSuggestionFeed(),
-    [desktop],
-  );
+  const feed = useMemo(() => createDesktopSuggestionFeed(desktop), [desktop]);
   const saveSuggestionState = useCallback(
     (state: PersistedSuggestionState) => {
-      void desktop?.saveSuggestionState(state);
+      void desktop.saveSuggestionState(state);
     },
     [desktop],
   );
   const inboxOptions = useMemo(
-    () => ({ onStateChange: desktop ? saveSuggestionState : undefined }),
-    [desktop, saveSuggestionState],
+    () => ({ onStateChange: saveSuggestionState }),
+    [saveSuggestionState],
   );
   const inbox = useSuggestionInbox(feed, inboxOptions);
   const resolvePreview = inbox.previewResolved;
   const hydrateInbox = inbox.hydrate;
-  const [provider, setProvider] = useState(DEFAULT_PROVIDER);
-  const [agentRuntime, setAgentRuntime] = useState(DEFAULT_AGENT_RUNTIME);
   const [sources, setSources] = useState<SourceSnapshot[]>([]);
   const documentIdRef = useRef("default-document");
   const documentRevisionRef = useRef(0);
-  const documentHydratedRef = useRef(!desktop);
+  const documentHydratedRef = useRef(false);
   const hydrationInProgressRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -149,9 +128,6 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (!desktop) {
-      return;
-    }
     let cancelled = false;
     void desktop
       .hydrate()
@@ -166,8 +142,6 @@ export default function App() {
         }
         documentIdRef.current = snapshot.document.id;
         documentRevisionRef.current = snapshot.document.revision;
-        setProvider(snapshot.provider);
-        setAgentRuntime(snapshot.agent);
         setSources(snapshot.sources);
         hydrateInbox(snapshot.suggestions);
         const finalBlock = editor.document.at(-1);
@@ -177,23 +151,15 @@ export default function App() {
           documentHydratedRef.current = true;
         });
       })
-      .catch((error: unknown) => {
-        setAgentRuntime((current) => ({
-          ...current,
-          lastError: error instanceof Error ? error.message : String(error),
-        }));
-      });
+      .catch((error: unknown) => console.error("Workspace hydration failed", error));
     return () => {
       cancelled = true;
     };
   }, [desktop, editor, hydrateInbox]);
 
   useEffect(() => {
-    if (!desktop) return;
     return desktop.subscribe((event) => {
-      if (event.type === "agent.runtime") {
-        setAgentRuntime(event.runtime);
-      } else if (event.type === "document.saved") {
+      if (event.type === "document.saved") {
         documentRevisionRef.current = event.document.revision;
       } else if (event.type === "source.imported") {
         setSources((current) => [
@@ -309,7 +275,6 @@ export default function App() {
 
   const persistDocument = useCallback(() => {
     if (
-      !desktop ||
       !documentHydratedRef.current ||
       hydrationInProgressRef.current
     ) {
@@ -327,19 +292,14 @@ export default function App() {
       .then((document) => {
         documentRevisionRef.current = document.revision;
       })
-      .catch((error: unknown) => {
-        setAgentRuntime((current) => ({
-          ...current,
-          lastError: error instanceof Error ? error.message : String(error),
-        }));
-      });
+      .catch((error: unknown) => console.error("Document save failed", error));
   }, [desktop, editor]);
 
   const handleEditorChange = useCallback(() => {
-    if (!desktop || hydrationInProgressRef.current) return;
+    if (hydrationInProgressRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(persistDocument, 650);
-  }, [desktop, persistDocument]);
+  }, [persistDocument]);
 
   useEffect(
     () => () => {
@@ -349,34 +309,8 @@ export default function App() {
     [persistDocument],
   );
 
-  const handleSaveProvider = useCallback(
-    async (next: ProviderSettings & { apiKey: string }) => {
-      if (!desktop) return;
-      const saved = await desktop.setProvider(next);
-      setProvider(saved);
-      setAgentRuntime((current) => ({
-        ...current,
-        configured: saved.enabled,
-        lastError: undefined,
-      }));
-    },
-    [desktop],
-  );
-
-  const handleSetAgentPaused = useCallback(
-    async (paused: boolean) => {
-      if (!desktop) return;
-      setAgentRuntime(await desktop.setAgentPaused(paused));
-    },
-    [desktop],
-  );
-
-  const handleConsiderNow = useCallback(async () => {
-    await desktop?.considerNow();
-  }, [desktop]);
-
   const handleUploadSource = useCallback(async () => {
-    const source = await desktop?.importSource();
+    const source = await desktop.importSource();
     if (source) {
       setSources((current) => [
         source,
@@ -453,18 +387,6 @@ export default function App() {
       unreadCount={inbox.unreadCount}
       status={inbox.status}
       error={inbox.error}
-      controls={
-        desktop ? (
-          <AgentControls
-            key={`${provider.provider}:${provider.model}:${provider.baseUrl}:${provider.enabled}`}
-            provider={provider}
-            runtime={agentRuntime}
-            onSaveProvider={handleSaveProvider}
-            onSetPaused={handleSetAgentPaused}
-            onConsiderNow={handleConsiderNow}
-          />
-        ) : undefined
-      }
       onSelect={inbox.select}
       onBack={inbox.back}
       onDismiss={inbox.dismiss}

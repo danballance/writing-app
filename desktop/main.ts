@@ -7,19 +7,27 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  Menu,
   utilityProcess,
+  type MenuItemConstructorOptions,
   type UtilityProcess,
   type WebContents,
 } from "electron";
 
+import {
+  loadAgentConfig,
+  resolveAgentModel,
+  type AgentModelConfig,
+  type LegacyProviderSettings,
+} from "./agent-config.js";
 import type {
   AgentRuntime,
   DesktopEvent,
   ObservationSeed,
-  ProviderSettings,
   SourceSnapshot,
   WorkspaceSnapshot,
 } from "../src/shared/desktop.js";
+import { isSuggestionItem } from "../src/suggestions/validation.js";
 
 type ChildMessage =
   | { kind: "ready" }
@@ -110,12 +118,15 @@ class ChildRpc {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
+const developmentServerUrl = process.env.VITE_DEV_SERVER_URL;
+const isDevelopment = Boolean(developmentServerUrl);
 let storage: ChildRpc;
 let agent: ChildRpc;
-let apiKey = "";
+let workspaceWindow: BrowserWindow | undefined;
+let mockSuggestionWindow: BrowserWindow | undefined;
+let agentConfig: AgentModelConfig | undefined;
 let lastCompletedProjectRevision = -1;
 let runtime: AgentRuntime = {
-  paused: false,
   running: false,
   configured: false,
 };
@@ -139,17 +150,14 @@ function validateSender(contents: WebContents) {
 }
 
 async function observe(force = false) {
-  const seed = await storage.call<ObservationSeed>("agent.seed");
-  if (!seed.provider.enabled || seed.paused) {
-    setRuntime({
-      configured: seed.provider.enabled,
-      paused: seed.paused,
-      running: false,
-    });
+  const config = agentConfig;
+  if (!config?.enabled) {
+    setRuntime({ configured: false, running: false });
     return;
   }
+  const seed = await storage.call<ObservationSeed>("agent.seed");
   if (!force && seed.projectRevision === lastCompletedProjectRevision) return;
-  agent.post({ kind: "observe", seed, apiKey, force });
+  agent.post({ kind: "observe", seed, config, force });
 }
 
 function registerIpc() {
@@ -158,9 +166,8 @@ function registerIpc() {
     const snapshot = await storage.call<WorkspaceSnapshot>("hydrate");
     runtime = {
       ...snapshot.agent,
-      configured: snapshot.provider.enabled,
+      ...runtime,
     };
-    agent.post({ kind: "configure", provider: snapshot.provider, apiKey });
     return { ...snapshot, agent: runtime };
   });
 
@@ -194,35 +201,18 @@ function registerIpc() {
     return storage.call<SourceSnapshot>("source.import", { path });
   });
 
-  ipcMain.handle("scribe:provider.set", async (event, input) => {
-    if (!validateSender(event.sender)) throw new Error("Unknown renderer");
-    const providerInput = input as ProviderSettings & { apiKey?: string };
-    apiKey = providerInput.apiKey ?? "";
-    const provider = await storage.call<ProviderSettings>("provider.set", {
-      provider: providerInput.provider,
-      model: providerInput.model,
-      baseUrl: providerInput.baseUrl,
-      enabled: providerInput.enabled,
-    });
-    setRuntime({ configured: provider.enabled, lastError: undefined });
-    agent.post({ kind: "configure", provider, apiKey });
-    void observe(true);
-    return provider;
-  });
-
-  ipcMain.handle("scribe:agent.pause", async (event, paused: boolean) => {
-    if (!validateSender(event.sender)) throw new Error("Unknown renderer");
-    await storage.call("agent.pause", { paused });
-    setRuntime({ paused });
-    agent.post({ kind: paused ? "abort" : "resume" });
-    if (!paused) void observe(true);
-    return runtime;
-  });
-
-  ipcMain.handle("scribe:agent.consider-now", async (event) => {
-    if (!validateSender(event.sender)) throw new Error("Unknown renderer");
-    await observe(true);
-  });
+  if (isDevelopment) {
+    ipcMain.handle(
+      "scribe:development.suggestion.create",
+      async (event, item: unknown) => {
+        if (!validateSender(event.sender)) throw new Error("Unknown renderer");
+        if (!isSuggestionItem(item)) {
+          throw new Error("Invalid development suggestion");
+        }
+        return storage.call("development.suggestion.create", { item });
+      },
+    );
+  }
 }
 
 function createWindow() {
@@ -236,15 +226,73 @@ function createWindow() {
       preload: join(here, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: isDevelopment ? ["--scribe-development"] : [],
     },
   });
-  const devUrl = process.env.SCRIBE_DEV_SERVER_URL;
-  if (devUrl) void window.loadURL(devUrl);
+  workspaceWindow = window;
+  window.on("closed", () => {
+    if (workspaceWindow === window) workspaceWindow = undefined;
+  });
+  if (developmentServerUrl) void window.loadURL(developmentServerUrl);
   else void window.loadFile(join(here, "../dist/index.html"));
 }
 
+function openMockSuggestionWindow() {
+  if (!developmentServerUrl) return;
+  if (mockSuggestionWindow && !mockSuggestionWindow.isDestroyed()) {
+    mockSuggestionWindow.focus();
+    return;
+  }
+
+  const window = new BrowserWindow({
+    width: 760,
+    height: 900,
+    minWidth: 600,
+    minHeight: 600,
+    title: "ScribeAI Mock Suggestions",
+    webPreferences: {
+      preload: join(here, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      additionalArguments: ["--scribe-development"],
+    },
+  });
+  mockSuggestionWindow = window;
+  window.on("closed", () => {
+    if (mockSuggestionWindow === window) mockSuggestionWindow = undefined;
+  });
+  void window.loadURL(new URL("/mock-suggestions", developmentServerUrl).toString());
+}
+
+function installDevelopmentMenu() {
+  if (!isDevelopment) return;
+  const template: MenuItemConstructorOptions[] = [
+    ...(process.platform === "darwin"
+      ? ([{ role: "appMenu" }] satisfies MenuItemConstructorOptions[])
+      : []),
+    { role: "fileMenu" },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    {
+      label: "Development",
+      submenu: [
+        {
+          label: "Mock suggestions",
+          accelerator: "CmdOrCtrl+Shift+M",
+          click: openMockSuggestionWindow,
+        },
+        { role: "toggleDevTools" },
+      ],
+    },
+    { role: "windowMenu" },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 async function start() {
-  const dbPath = join(app.getPath("userData"), "scribe.sqlite3");
+  const userDataPath = app.getPath("userData");
+  const dbPath = join(userDataPath, "scribe.sqlite3");
+  const agentConfigPath = join(userDataPath, "agent.yaml");
   storage = new ChildRpc(join(here, "storage.js"), [dbPath], (message) => {
     if (message.kind === "domain.event") broadcast(message.event);
   });
@@ -269,7 +317,36 @@ async function start() {
     }
   });
   await Promise.all([storage.ready, agent.ready]);
+  const legacy = await storage.call<LegacyProviderSettings>("provider.get");
+  const loadedConfig = await loadAgentConfig(agentConfigPath, legacy);
+  if (loadedConfig.config) {
+    try {
+      resolveAgentModel(loadedConfig.config);
+      agentConfig = loadedConfig.config;
+      runtime = {
+        ...runtime,
+        configured: loadedConfig.config.enabled,
+        lastError: undefined,
+      };
+    } catch (error) {
+      runtime = {
+        ...runtime,
+        configured: false,
+        lastError: error instanceof Error ? error.message : String(error),
+      };
+    }
+  } else {
+    runtime = {
+      ...runtime,
+      configured: false,
+      lastError: loadedConfig.error,
+    };
+  }
+  console.info(
+    `${loadedConfig.created ? "Created" : "Loaded"} agent configuration: ${agentConfigPath}`,
+  );
   registerIpc();
+  installDevelopmentMenu();
   createWindow();
   scheduler = setInterval(() => void observe(), 10_000);
   void observe();
@@ -281,7 +358,7 @@ app.whenReady().then(start).catch((error: unknown) => {
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (!workspaceWindow) createWindow();
 });
 
 app.on("window-all-closed", () => {

@@ -4,9 +4,8 @@
 
 - Node.js `>=22.19.0`. Pi agent-core sets the effective project minimum.
 - npm, using the committed `package-lock.json`.
-- A modern browser with ES2022, `BroadcastChannel`, dynamic imports, media queries, pointer events, and `ResizeObserver` support.
 
-No database daemon is required. The Electron runtime creates its SQLite database in the platform application-data directory. An API key or local inference endpoint is only required when enabling the Pi agent.
+No database daemon is required. Electron creates its SQLite database in the platform application-data directory. An API key or local inference endpoint is only required when enabling the Pi agent.
 
 ## Install and run
 
@@ -17,7 +16,9 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite. Vite normally uses `http://localhost:5173`, but it will select another port if that one is occupied.
+Vite builds the Electron main, preload, storage, and agent entries, starts its renderer development server, and launches Electron. Renderer changes use HMR; main, storage, or agent changes restart Electron; preload changes reload the renderer.
+
+Development intentionally uses the same Electron `userData` directory as a built or installed ScribeAI application. Edits, imported sources, settings, and mock suggestions therefore affect the same persisted workspace. Do not run development and an installed build concurrently against that profile.
 
 Use `npm ci`, rather than `npm install`, for a clean checkout or CI job so dependency versions remain aligned with the lockfile.
 
@@ -27,18 +28,17 @@ To build and launch the persistent desktop application:
 npm run desktop
 ```
 
-This command always builds the renderer and Electron processes before launching. The production renderer is loaded directly from `dist/index.html`, not from Vite's development server. The first desktop launch creates the default project and document. Open **Agent settings** in the writing-partner panel to select a provider/model, optionally supply a base URL, enter the API key for the current launch, and enable observation.
+This command always builds the renderer and Electron processes before launching. The production renderer is loaded directly from `dist/index.html`, not from Vite's development server. The first desktop launch creates the default project, document, and `agent.yaml` under Electron's `userData` directory. Agent configuration is edited outside the application and loaded on restart.
 
 ## What to expect after startup
 
-The root URL opens the writing workspace with seeded document content and an empty suggestion inbox. Suggestions are injected manually from a temporary controller:
+Electron opens the persisted writing workspace. To inject deterministic suggestions without invoking a model:
 
-1. Keep the writing workspace open in one tab, or use the controller's Open writing workspace link.
-2. Open `/mock-suggestions` on the same origin in a second tab, for example `http://localhost:5173/mock-suggestions`.
-3. Choose one of the six suggestion kinds, complete its common and kind-specific fields, and send it.
-4. The suggestion appears immediately in the writing workspace inbox.
+1. Choose **Development → Mock suggestions**, or press `CmdOrCtrl+Shift+M`.
+2. Complete one of the six suggestion forms in the dedicated development window.
+3. Send it; the suggestion is validated, committed to SQLite, and delivered through the same event path as an agent suggestion.
 
-Delivery uses `BroadcastChannel`: both tabs must be open concurrently on the same origin. Events are not stored or replayed, and reloading the writing workspace clears its inbox. This controller/channel path is the only mock event source; the workspace has no separate generation or steering controls.
+The development window is single-instance. Closing and reopening it does not clear injected suggestions.
 
 React runs in `StrictMode`. During development, effects are mounted, cleaned up, and mounted again to expose unsafe effect code. The mock feed opens its channel receiver for the first subscriber and closes it after the final subscriber leaves, preventing duplicate streams.
 
@@ -46,14 +46,12 @@ React runs in `StrictMode`. During development, effects are mounted, cleaned up,
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start the Vite development server with hot reload. |
-| `npm run build` | Type-check and build both the Vite renderer and Electron process bundles. |
-| `npm run build:desktop` | Type-check and bundle only Electron process entries. |
+| `npm run dev` | Start Vite and launch the complete Electron development runtime. |
+| `npm run build` | Type-check and build the renderer and all Electron process entries. |
 | `npm run desktop` | Build and launch the Electron application. |
 | `npm run package` | Build an unpacked desktop application with electron-builder. |
 | `npm run dist` | Build platform installers with electron-builder. |
 | `npm run docs:build` | Regenerate the static site in `docs/html/` from the Markdown documentation. |
-| `npm run preview` | Serve the existing production bundle locally. Run `npm run build` first. |
 | `npm run lint` | Run ESLint over the repository. |
 | `npm test` | Run all Vitest tests once in jsdom. |
 | `npm run test:watch` | Run Vitest in watch mode. |
@@ -72,14 +70,25 @@ The production build currently completes with Vite's warning that some minified 
 
 ## Runtime configuration
 
-The browser runtime has no `.env` contract and uses the mock feed. The Electron runtime persists non-secret global provider/model/base-URL settings in SQLite; the API key is entered for each application launch.
+The global agent model is configured in `agent.yaml` under Electron's `userData` directory. The file is created on first launch from any legacy SQLite provider settings. Edit it while the app is closed, then restart:
+
+```yaml
+version: 1
+enabled: true
+provider:
+  id: anthropic
+  apiKeyEnv: ANTHROPIC_API_KEY
+model:
+  id: claude-sonnet-4-6
+```
+
+Catalog models inherit their Pi metadata. Custom models must set `provider.api` and `provider.baseUrl`; optional model fields include `name`, `reasoning`, `thinkingLevelMap`, `input`, `contextWindow`, `maxTokens`, `cost`, `headers`, and `compat`. Header values may use `$ENV_VAR`. API keys are read from `provider.apiKeyEnv` or Pi's standard provider environment variable and are never stored by ScribeAI.
 
 - initial editor content: [`initialContent`](../src/App.tsx);
-- temporary suggestion controller and channel: [`src/dev/mockSuggestions`](../src/dev/mockSuggestions);
-- injected feed adapter: [`createInjectedSuggestionFeed.ts`](../src/dev/mockSuggestions/createInjectedSuggestionFeed.ts);
-- desktop provider settings and observation controls: [`AgentControls.tsx`](../src/components/AgentControls.tsx).
+- Electron-only mock suggestion controller: [`src/dev/mockSuggestions`](../src/dev/mockSuggestions);
+- agent model schema and resolution: [`agent-config.ts`](../desktop/agent-config.ts).
 
-## Browser storage
+## Renderer preferences
 
 The app stores two optional values:
 
@@ -96,7 +105,7 @@ These values remain renderer-local in both runtimes. Electron workspace data liv
 
 At a viewport at least `80rem` wide:
 
-1. Inject one suggestion of each kind from `/mock-suggestions`.
+1. Inject one suggestion of each kind from **Development → Mock suggestions**.
 2. Open a text suggestion, preview it, edit the purple preview block, then cancel it.
 3. Preview again and accept it; it becomes a normal paragraph and the suggestion disappears.
 4. Pin a suggestion, open it, and place it on the workspace.
@@ -115,7 +124,7 @@ For an Electron smoke test:
 1. Run `npm run desktop` and confirm the workspace, editor, and both side panels render.
 2. Edit the document, wait at least 650 ms, restart, and confirm the accepted blocks return.
 3. Import a text, Markdown, JSON, DOCX, or PDF source and confirm it appears under **AI research context**.
-4. Configure an agent provider, exercise Pause / Resume and Consider now, and confirm the API key field clears after save.
+4. Edit `agent.yaml`, restart, and confirm a valid enabled model begins observing while an invalid file leaves the agent offline with an error.
 
 ## Common problems
 
@@ -151,4 +160,4 @@ Check that a new feed is not being created on every render. [`App.tsx`](../src/A
 
 ### A manually sent suggestion does not appear
 
-Confirm both tabs use exactly the same scheme, host, and port, and that the writing workspace was already open when Send was pressed. `BroadcastChannel` delivery is live-only. The controller reports an explicit error if the browser does not provide the API.
+Confirm the controller was opened from the Electron **Development** menu rather than by visiting the Vite URL in a browser. Check the controller error message and main-process logs; development injection is rejected outside the Electron development runtime.

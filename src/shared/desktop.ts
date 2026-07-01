@@ -30,15 +30,7 @@ export type PersistedSuggestionState = {
   nextZIndex: number;
 };
 
-export type ProviderSettings = {
-  provider: string;
-  model: string;
-  baseUrl: string;
-  enabled: boolean;
-};
-
 export type AgentRuntime = {
-  paused: boolean;
   running: boolean;
   configured: boolean;
   lastCompletedAt?: number;
@@ -69,7 +61,6 @@ export type WorkspaceSnapshot = {
   document: DocumentSnapshot;
   sources: SourceSnapshot[];
   suggestions: PersistedSuggestionState;
-  provider: ProviderSettings;
   agent: AgentRuntime;
   sequence: number;
 };
@@ -89,10 +80,11 @@ export type DesktopBridge = {
   }): Promise<DocumentSnapshot>;
   saveSuggestionState(state: PersistedSuggestionState): Promise<void>;
   importSource(): Promise<SourceSnapshot | undefined>;
-  setProvider(input: ProviderSettings & { apiKey: string }): Promise<ProviderSettings>;
-  setAgentPaused(paused: boolean): Promise<AgentRuntime>;
-  considerNow(): Promise<void>;
   subscribe(listener: (event: DesktopEvent) => void): () => void;
+};
+
+export type DesktopDevelopmentBridge = {
+  createSuggestion(item: SuggestionItem): Promise<{ accepted: boolean }>;
 };
 
 export type ProjectContentItem = {
@@ -110,6 +102,4 @@ export type ObservationSeed = {
   documentTitle: string;
   documentRevision: number;
   memorySummary: string;
-  provider: ProviderSettings;
-  paused: boolean;
 };

@@ -19,35 +19,34 @@ npm run lint
 npm run build
 ```
 
-`npm run build` is also the authoritative type and bundle check. It runs `tsc -b`, builds the Vite renderer, then type-checks and bundles the Electron main, preload, storage, and agent entries. TypeScript uses strict mode, rejects unused locals and parameters, and disallows fallthrough switch cases.
+`npm run build` is also the authoritative type and bundle check. It type-checks the renderer and Electron projects, then runs the integrated Vite build for renderer, main, preload, storage, and agent entries. TypeScript uses strict mode, rejects unused locals and parameters, and disallows fallthrough switch cases.
 
 ## Current automated coverage
 
-The suite currently contains 34 tests across nine files.
+The suite currently contains 34 tests across eight files.
 
 | File | What it protects |
 | --- | --- |
 | [`suggestions/inbox.test.ts`](../src/suggestions/inbox.test.ts) | Dedupe, 30-item eviction, stale/withdrawn previews, frozen pins, workspace transitions, preview resolution, and z-order. |
-| [`dev/mockSuggestions/createInjectedSuggestionFeed.test.ts`](../src/dev/mockSuggestions/createInjectedSuggestionFeed.test.ts) | Channel delivery, malformed-message rejection, and unsubscribe cleanup. |
 | [`dev/mockSuggestions/mockSuggestionDraft.test.ts`](../src/dev/mockSuggestions/mockSuggestionDraft.test.ts) | Common metadata, every kind-specific payload, recursive node JSON, and validation failures. |
-| [`dev/mockSuggestions/MockSuggestionController.test.tsx`](../src/dev/mockSuggestions/MockSuggestionController.test.tsx) | Dynamic fields, form submission/reset, channel publication, and unsupported-browser behavior. |
+| [`dev/mockSuggestions/MockSuggestionController.test.tsx`](../src/dev/mockSuggestions/MockSuggestionController.test.tsx) | Dynamic fields, persisted development submission, rejection handling, and pending-state protection. |
 | [`components/SuggestionDock.test.tsx`](../src/components/SuggestionDock.test.tsx) | Absence of legacy steering controls, unified stream, text preview action, pin presentation, and workspace placement callback. |
 | [`components/WorkspacePins.test.tsx`](../src/components/WorkspacePins.test.tsx) | Card content, return action, keyboard geometry, and pointer drag commit. |
 | [`components/DocumentHeader.test.tsx`](../src/components/DocumentHeader.test.tsx) | Desktop panel semantics, hidden-partner unread count, and independent mobile controls. |
 | [`components/ResponsiveDrawer.test.tsx`](../src/components/ResponsiveDrawer.test.tsx) | Escape/close behavior and focus restoration. |
-| [`desktop/storage.test.ts`](../desktop/storage.test.ts) | SQLite bootstrap and revisioned document saves, durable agent suggestions, transcript recording, and searchable source import. |
+| [`desktop/storage.test.ts`](../desktop/storage.test.ts) | SQLite bootstrap and revisioned document saves, durable agent/development suggestions, transcript recording, and searchable source import. |
 
 ### Why reducer tests matter most
 
 The inbox reducer contains the application's lifecycle invariants and is pure. Any change to dedupe, updates, retractions, selection, previewing, pins, workspace geometry, queue limits, or unread behavior should begin with a reducer case. Component tests should then verify that the correct intent is exposed to users.
 
-### Feed lifecycle tests
+### Development injection tests
 
-The mock feed owns a browser channel while it has subscribers. Always unsubscribe and verify no new events arrive; feed cleanup is required for React `StrictMode` and future reconnection logic.
+The controller test injects a callback rather than Electron IPC. Storage tests protect durable development suggestion behavior; manually confirm the development-only preload and main-process gates in Electron.
 
 ### Geometry tests
 
-jsdom does not perform layout. Workspace tests mock `clientWidth` and `clientHeight`, and pointer-capture methods are stubbed where needed. A passing geometry unit test does not replace browser testing for actual scroll, resizing, and pointer behavior.
+jsdom does not perform layout. Workspace tests mock `clientWidth` and `clientHeight`, and pointer-capture methods are stubbed where needed. A passing geometry unit test does not replace Electron renderer testing for actual scroll, resizing, and pointer behavior.
 
 ## What is not covered automatically
 
@@ -118,11 +117,15 @@ Changes in these areas require targeted tests where practical and the manual che
 
 ### Electron runtime
 
+- Run `npm run dev` and confirm Electron launches without manually opening the Vite URL.
+- Change renderer code and confirm HMR; change main/storage/agent code and confirm Electron restarts; change preload and confirm the renderer reloads.
+- Open **Development → Mock suggestions** twice and confirm one controller window is focused rather than duplicated.
+- Inject a suggestion, reload, and confirm it remains persisted. Confirm a production launch has no development menu or bridge.
 - Launch the built application and confirm the renderer mounts without failed local script or stylesheet requests.
 - Edit and restart to verify document hydration and the 650 ms autosave path.
 - Import each supported source type; include PDF to exercise the utility-process canvas globals.
-- Restart and confirm sources, suggestions, pins, workspace geometry, provider settings, and paused state hydrate from SQLite.
-- Confirm an API key is retained only for the current launch and is not restored from the database.
+- Restart and confirm sources, suggestions, pins, and workspace geometry hydrate from SQLite.
+- Confirm `agent.yaml` is created once, valid edits take effect after restart, invalid edits leave the agent offline, and environment-backed API keys never enter SQLite or renderer state.
 - Force a storage or agent utility-process startup failure and confirm main reports the failure and exits instead of hanging without a window.
 
 ## Adding tests

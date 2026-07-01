@@ -1,6 +1,6 @@
 # Editor and suggestion system
 
-This is the core interaction model: the injected feed emits events, the inbox reducer turns those events and user actions into state, and text suggestions can temporarily enter the document as editable previews.
+This is the core interaction model: the Electron feed emits committed events, the inbox reducer turns those events and user actions into state, and text suggestions can temporarily enter the document as editable previews.
 
 ## Domain model
 
@@ -47,15 +47,9 @@ The event channel supports:
 | `agent.status` | Set `idle`, `working`, or `offline` and clear the current error. |
 | `agent.error` | Set a displayable error and its recoverability metadata. |
 
-The browser-only development adapter in [`createInjectedSuggestionFeed.ts`](../src/dev/mockSuggestions/createInjectedSuggestionFeed.ts):
+The renderer uses [`createDesktopSuggestionFeed`](../src/desktop/desktopClient.ts). It receives suggestion and agent-status events from Electron main. Suggestions are written to the desktop database before an event is forwarded, so reload hydrates the same inbox projection.
 
-- opens a `BroadcastChannel` receiver when its first listener subscribes;
-- forwards valid `suggestion.added` events sent by the temporary `/mock-suggestions` controller;
-- closes the channel receiver after its last listener leaves.
-
-The temporary controller supports all six suggestion kinds. It generates identity, dedupe, and timestamp fields; validates recursive structure-node JSON; and sends events only to already-open same-origin tabs.
-
-The packaged desktop application instead uses [`createDesktopSuggestionFeed`](../src/desktop/desktopClient.ts). It receives suggestion and agent-status events from the Electron main process. Suggestions are written to the desktop database before an event is forwarded to the renderer, so reload hydrates the same inbox projection rather than starting a mock session.
+During Vite development, a separate Electron controller window supports all six suggestion kinds. It generates identity, dedupe, and timestamp fields, validates recursive structure-node JSON, and invokes a development-only preload bridge. Main validates the payload again and asks storage to commit it through the same suggestion path used by the Pi agent.
 
 ## Inbox state machine
 
